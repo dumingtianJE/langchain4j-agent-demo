@@ -28,16 +28,31 @@ ai.embedding.auto-save-interval=300
 jwt.secret=mySecretKeyForJWTTokenGenerationAndValidation123456789
 jwt.expiration=86400
 
-# 数据库配置 (H2)
+# 数据库配置 (H2 开发环境)
 spring.datasource.url=jdbc:h2:file:./data/ai-agent-db;DB_CLOSE_ON_EXIT=FALSE
 spring.datasource.driver-class-name=org.h2.Driver
 spring.datasource.username=sa
 spring.datasource.password=
 
+# MySQL 配置（生产环境取消注释）
+# spring.datasource.url=jdbc:mysql://localhost:3306/ai_agent_prod?useUnicode=true&characterEncoding=utf8mb4&useSSL=false&serverTimezone=Asia/Shanghai
+# spring.datasource.username=ai_agent_user
+# spring.datasource.password=${DB_PASSWORD}
+# spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
 # JPA 配置
 spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.show-sql=false
+
+# HikariCP 连接池优化
+spring.datasource.hikari.maximum-pool-size=20
+spring.datasource.hikari.minimum-idle=5
+spring.datasource.hikari.connection-timeout=30000
+spring.datasource.hikari.idle-timeout=600000
+spring.datasource.hikari.max-lifetime=1800000
+spring.datasource.hikari.validation-timeout=5000
+spring.datasource.hikari.connection-test-query=SELECT 1
 
 # H2 控制台 (开发环境)
 spring.h2.console.enabled=true
@@ -47,10 +62,20 @@ spring.h2.console.path=/h2-console
 spring.data.redis.host=localhost
 spring.data.redis.port=6379
 spring.data.redis.password=
-spring.data.redis.timeout=3000
-spring.data.redis.lettuce.pool.max-active=8
-spring.data.redis.lettuce.pool.max-idle=8
-spring.data.redis.lettuce.pool.min-idle=2
+spring.data.redis.timeout=5000
+spring.data.redis.lettuce.pool.max-active=20
+spring.data.redis.lettuce.pool.max-idle=10
+spring.data.redis.lettuce.pool.min-idle=5
+spring.data.redis.lettuce.pool.max-wait=3000
+
+# Redis Sentinel 高可用配置（生产环境取消注释）
+# spring.data.redis.sentinel.master=mymaster
+# spring.data.redis.sentinel.nodes=host1:26379,host2:26379,host3:26379
+# spring.data.redis.password=${REDIS_PASSWORD}
+
+# Redis Cluster 高可用配置（生产环境取消注释）
+# spring.data.redis.cluster.nodes=host1:6379,host2:6379,host3:6379
+# spring.data.redis.cluster.max-redirects=3
 
 # Prometheus 监控配置
 management.endpoints.web.exposure.include=health,prometheus,info,metrics
@@ -58,9 +83,32 @@ management.endpoint.health.show-details=always
 management.endpoint.prometheus.enabled=true
 management.metrics.enable.all=true
 
+# Milvus 向量数据库配置（生产环境）
+ai.milvus.host=localhost
+ai.milvus.port=19530
+ai.milvus.collection-name=ai_knowledge_embeddings
+ai.milvus.dimension=1024
+ai.milvus.index-type=HNSW
+ai.milvus.metric-type=COSINE
+ai.milvus.hnsw-m=16
+ai.milvus.hnsw-ef-construction=200
+ai.milvus.hnsw-ef=64
+ai.milvus.ivf-nlist=1024
+ai.milvus.ivf-nprobe=16
+
+# API 限流配置
+ai.ratelimit.enabled=true
+ai.ratelimit.requests-per-minute=100
+ai.ratelimit.burst-capacity=150
+
 # 日志配置
 logging.level.dev.langchain4j=DEBUG
 logging.level.com.yourcompany=INFO
+logging.level.io.milvus=WARN
 
-# 日志格式
+# 日志文件配置
+logging.file.name=./logs/application.log
+logging.file.max-size=100MB
+logging.file.max-history=30
 logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n
+logging.pattern.file=%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n
