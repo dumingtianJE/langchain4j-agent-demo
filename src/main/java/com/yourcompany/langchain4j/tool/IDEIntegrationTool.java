@@ -1,7 +1,6 @@
 package com.yourcompany.langchain4j.tool;
 
 import dev.langchain4j.agent.tool.Tool;
-import dev.langchain4j.agent.tool.ToolMemory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -15,11 +14,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class IDEIntegrationTool {
     
-    @Tool("在IDE中打开文件并显示代码差异（Diff View）")
-    public String openDiffView(
-            @ToolMemory String filePath,
-            @ToolMemory String newCode,
-            @ToolMemory String description) {
+    @Tool("在IDE中打开文件并显示代码差异（Diff View）。参数：filePath-文件路径, newCode-新代码, description-描述")
+    public String openDiffView(String filePath, String newCode, String description) {
         
         // 实际实现需要调用 IDE 的 API
         // 例如 VS Code: vscode.commands.executeCommand('vscode.diff', ...)
@@ -39,8 +35,8 @@ public class IDEIntegrationTool {
             """, filePath, description);
     }
     
-    @Tool("在 IDE 终端中执行代码格式化命令")
-    public String formatCode(@ToolMemory String filePath, @ToolMemory String formatter) {
+    @Tool("在 IDE 终端中执行代码格式化命令。参数：filePath-文件路径, formatter-格式化工具名称")
+    public String formatCode(String filePath, String formatter) {
         
         String command = switch (formatter.toLowerCase()) {
             case "prettier" -> "npx prettier --write " + filePath;
@@ -61,8 +57,8 @@ public class IDEIntegrationTool {
             """, filePath, formatter, command);
     }
     
-    @Tool("运行单元测试并查看结果")
-    public String runUnitTests(@ToolMemory String testClass, @ToolMemory String testMethod) {
+    @Tool("运行单元测试并查看结果。参数：testClass-测试类名, testMethod-测试方法名（可选）")
+    public String runUnitTests(String testClass, String testMethod) {
         
         String command;
         
@@ -83,11 +79,8 @@ public class IDEIntegrationTool {
             """, testClass, testMethod, command);
     }
     
-    @Tool("在 IDE 中显示代码建议面板")
-    public String showCodeSuggestion(
-            @ToolMemory String suggestion,
-            @ToolMemory String codeSnippet,
-            @ToolMemory String filePath) {
+    @Tool("在 IDE 中显示代码建议面板。参数：suggestion-建议内容, codeSnippet-代码片段, filePath-文件路径")
+    public String showCodeSuggestion(String suggestion, String codeSnippet, String filePath) {
         
         return String.format("""
             💡 AI 代码建议
@@ -107,11 +100,8 @@ public class IDEIntegrationTool {
             """, filePath, suggestion, codeSnippet);
     }
     
-    @Tool("配置 IDE 的 AI 助手插件")
-    public String configureIDEPlugin(
-            @ToolMemory String ideType,
-            @ToolMemory String apiKey,
-            @ToolMemory String model) {
+    @Tool("配置 IDE 的 AI 助手插件。参数：ideType-IDE类型（vscode/intellij）, apiKey-API密钥, model-模型名称")
+    public String configureIDEPlugin(String ideType, String apiKey, String model) {
         
         String configTemplate = switch (ideType.toLowerCase()) {
             case "vscode" -> """

@@ -1,7 +1,6 @@
 package com.yourcompany.langchain4j.tool;
 
 import dev.langchain4j.agent.tool.Tool;
-import dev.langchain4j.agent.tool.ToolMemory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -26,11 +25,8 @@ public class GitIntegrationTool {
      */
     private final Map<String, BranchInfo> taskBranches = new ConcurrentHashMap<>();
     
-    @Tool("为AI代码创建新的Git分支，避免直接在主分支上修改")
-    public String createFeatureBranch(
-            @ToolMemory String taskId,
-            @ToolMemory String branchName,
-            @ToolMemory String description) {
+    @Tool("为AI代码创建新的Git分支，避免直接在主分支上修改。参数：taskId-任务ID, branchName-分支名称, description-分支描述")
+    public String createFeatureBranch(String taskId, String branchName, String description) {
         
         try {
             // 1. 检查是否在Git仓库中
@@ -66,11 +62,8 @@ public class GitIntegrationTool {
         }
     }
     
-    @Tool("将AI生成的代码提交到当前分支")
-    public String commitCode(
-            @ToolMemory String taskId,
-            @ToolMemory String commitMessage,
-            @ToolMemory String filePaths) {
+    @Tool("将AI生成的代码提交到当前分支。参数：taskId-任务ID, commitMessage-提交信息, filePaths-文件路径（逗号分隔）")
+    public String commitCode(String taskId, String commitMessage, String filePaths) {
         
         try {
             // 1. 获取分支信息
@@ -110,8 +103,8 @@ public class GitIntegrationTool {
         }
     }
     
-    @Tool("将当前分支推送到远程仓库")
-    public String pushToRemote(@ToolMemory String taskId) {
+    @Tool("将当前分支推送到远程仓库。参数：taskId-任务ID")
+    public String pushToRemote(String taskId) {
         try {
             BranchInfo branchInfo = taskBranches.get(taskId);
             if (branchInfo == null) {
@@ -136,12 +129,8 @@ public class GitIntegrationTool {
         }
     }
     
-    @Tool("创建 Pull Request（GitHub/GitLab）")
-    public String createPullRequest(
-            @ToolMemory String taskId,
-            @ToolMemory String title,
-            @ToolMemory String description,
-            @ToolMemory String targetBranch) {
+    @Tool("创建 Pull Request（GitHub/GitLab）。参数：taskId-任务ID, title-PR标题, description-PR描述, targetBranch-目标分支")
+    public String createPullRequest(String taskId, String title, String description, String targetBranch) {
         
         try {
             BranchInfo branchInfo = taskBranches.get(taskId);
@@ -182,8 +171,8 @@ public class GitIntegrationTool {
         }
     }
     
-    @Tool("查看当前任务的分支和提交历史")
-    public String getTaskStatus(@ToolMemory String taskId) {
+    @Tool("查看当前任务的分支和提交历史。参数：taskId-任务ID")
+    public String getTaskStatus(String taskId) {
         BranchInfo branchInfo = taskBranches.get(taskId);
         
         if (branchInfo == null) {
@@ -211,10 +200,8 @@ public class GitIntegrationTool {
         return status.toString();
     }
     
-    @Tool("合并分支到目标分支")
-    public String mergeBranch(
-            @ToolMemory String taskId,
-            @ToolMemory String targetBranch) {
+    @Tool("合并分支到目标分支。参数：taskId-任务ID, targetBranch-目标分支名称")
+    public String mergeBranch(String taskId, String targetBranch) {
         
         try {
             BranchInfo branchInfo = taskBranches.get(taskId);

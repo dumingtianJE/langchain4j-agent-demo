@@ -1,7 +1,6 @@
 package com.yourcompany.langchain4j.tool;
 
 import dev.langchain4j.agent.tool.Tool;
-import dev.langchain4j.agent.tool.ToolMemory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -22,11 +21,8 @@ import java.util.*;
 @Component
 public class CodeWriteTool {
     
-    @Tool("将AI生成的代码写入指定文件路径。支持创建新文件和修改现有文件。")
-    public String writeCodeToFile(
-            @ToolMemory String filePath,
-            @ToolMemory String codeContent,
-            @ToolMemory String description) {
+    @Tool("将AI生成的代码写入指定文件路径。支持创建新文件和修改现有文件。参数：filePath-文件路径, codeContent-代码内容, description-描述")
+    public String writeCodeToFile(String filePath, String codeContent, String description) {
         
         try {
             Path path = Paths.get(filePath);
@@ -63,8 +59,8 @@ public class CodeWriteTool {
         }
     }
     
-    @Tool("读取指定文件的内容，用于查看现有代码或验证写入结果")
-    public String readFileContent(@ToolMemory String filePath) {
+    @Tool("读取指定文件的内容，用于查看现有代码或验证写入结果。参数：filePath-文件路径")
+    public String readFileContent(String filePath) {
         try {
             Path path = Paths.get(filePath);
             
@@ -81,11 +77,8 @@ public class CodeWriteTool {
         }
     }
     
-    @Tool("创建新文件，如果文件已存在则返回错误")
-    public String createNewFile(
-            @ToolMemory String filePath,
-            @ToolMemory String codeContent,
-            @ToolMemory String description) {
+    @Tool("创建新文件，如果文件已存在则返回错误。参数：filePath-文件路径, codeContent-代码内容, description-描述")
+    public String createNewFile(String filePath, String codeContent, String description) {
         
         Path path = Paths.get(filePath);
         
@@ -96,11 +89,8 @@ public class CodeWriteTool {
         return writeCodeToFile(filePath, codeContent, description);
     }
     
-    @Tool("追加内容到现有文件末尾")
-    public String appendToFile(
-            @ToolMemory String filePath,
-            @ToolMemory String codeContent,
-            @ToolMemory String description) {
+    @Tool("追加内容到现有文件末尾。参数：filePath-文件路径, codeContent-代码内容, description-描述")
+    public String appendToFile(String filePath, String codeContent, String description) {
         
         try {
             Path path = Paths.get(filePath);
@@ -123,8 +113,8 @@ public class CodeWriteTool {
         }
     }
     
-    @Tool("删除指定文件（会先备份）")
-    public String deleteFile(@ToolMemory String filePath, @ToolMemory String reason) {
+    @Tool("删除指定文件（会先备份）。参数：filePath-文件路径, reason-删除原因")
+    public String deleteFile(String filePath, String reason) {
         try {
             Path path = Paths.get(filePath);
             
@@ -149,8 +139,8 @@ public class CodeWriteTool {
         }
     }
     
-    @Tool("列出目录下的所有文件")
-    public String listDirectory(@ToolMemory String directoryPath) {
+    @Tool("列出目录下的所有文件。参数：directoryPath-目录路径")
+    public String listDirectory(String directoryPath) {
         try {
             Path path = Paths.get(directoryPath);
             
