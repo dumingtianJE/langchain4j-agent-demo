@@ -19,6 +19,45 @@ ai.supervisor.max-tokens-per-day=1000000
 ai.supervisor.max-concurrent-requests=10
 ai.supervisor.alert-threshold=0.8
 
+# 向量存储配置
+ai.embedding.type=filesystem
+ai.embedding.filesystem-path=./data/embeddings
+ai.embedding.auto-save-interval=300
+
+# JWT 配置
+jwt.secret=mySecretKeyForJWTTokenGenerationAndValidation123456789
+jwt.expiration=86400
+
+# 数据库配置 (H2)
+spring.datasource.url=jdbc:h2:file:./data/ai-agent-db;DB_CLOSE_ON_EXIT=FALSE
+spring.datasource.driver-class-name=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+
+# JPA 配置
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=false
+
+# H2 控制台 (开发环境)
+spring.h2.console.enabled=true
+spring.h2.console.path=/h2-console
+
+# Redis 配置
+spring.data.redis.host=localhost
+spring.data.redis.port=6379
+spring.data.redis.password=
+spring.data.redis.timeout=3000
+spring.data.redis.lettuce.pool.max-active=8
+spring.data.redis.lettuce.pool.max-idle=8
+spring.data.redis.lettuce.pool.min-idle=2
+
+# Prometheus 监控配置
+management.endpoints.web.exposure.include=health,prometheus,info,metrics
+management.endpoint.health.show-details=always
+management.endpoint.prometheus.enabled=true
+management.metrics.enable.all=true
+
 # 日志配置
 logging.level.dev.langchain4j=DEBUG
 logging.level.com.yourcompany=INFO
