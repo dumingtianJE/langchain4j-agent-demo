@@ -41,17 +41,25 @@ public class AiProgrammingAgentConfig {
     
     /**
      * 配置 Embedding 模型
-     * 注意：需要在 application.yml 中配置相应的 API 密钥
+     * 使用通义千问的 Embedding 服务（OpenAI 兼容接口）
      */
     @Bean
     public EmbeddingModel embeddingModel() {
-        // 这里使用 OpenAI 兼容的 embedding 模型
-        // 生产环境可以替换为其他 embedding 服务
-        return new dev.langchain4j.model.openai.OpenAiEmbeddingModel.builder()
-            .baseUrl("https://dashscope.aliyuncs.com/compatible-mode/v1")
-            .apiKey(System.getenv("DASHSCOPE_API_KEY"))
-            .modelName("text-embedding-v3")
-            .build();
+        log.info("初始化 Embedding 模型 (text-embedding-v3)");
+        
+        // 使用 OpenAI 兼容接口调用通义千问 Embedding
+        return new dev.langchain4j.model.openai.OpenAiEmbeddingModel(
+            "sk-b1095efa41cf4fee82ef4e13ae6a6c9f",  // API Key
+            null,  // organization ID
+            null,  // user
+            "https://dashscope.aliyuncs.com/compatible-mode/v1",  // Base URL
+            "text-embedding-v3",  // Model name
+            null,  // dimensions
+            null,  // timeout
+            0,     // max retries
+            null,  // log requests
+            null   // log responses
+        );
     }
     
     /**
