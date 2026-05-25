@@ -1,0 +1,18 @@
+# Spring Boot 配置
+spring.application.name=langchain4j-agent-demo
+server.port=8080
+
+# LangChain4j OpenAI 配置 (兼容通义千问)
+# 使用阿里云通义千问模型
+langchain4j.open-ai.chat-model.api-key=sk-b1095efa41cf4fee82ef4e13ae6a6c9f
+langchain4j.open-ai.chat-model.base-url=https://dashscope.aliyuncs.com/compatible-mode/v1
+langchain4j.open-ai.chat-model.model-name=qwen-max
+langchain4j.open-ai.chat-model.temperature=0.7
+langchain4j.open-ai.chat-model.timeout=PT60S
+
+# 日志配置
+logging.level.dev.langchain4j=DEBUG
+logging.level.com.yourcompany=INFO
+
+# 日志格式
+logging.pattern.console=%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n
