@@ -4,7 +4,7 @@ import com.yourcompany.langchain4j.agent.AiProgrammingAgent;
 import com.yourcompany.langchain4j.supervisor.AiSupervisor;
 import com.yourcompany.langchain4j.tool.CodeAnalysisTool;
 import com.yourcompany.langchain4j.tool.CodeFileTool;
-import com.yourcompany.langchain4j.tool.KnowledgeBaseTool;
+// import com.yourcompany.langchain4j.tool.KnowledgeBaseTool;  // 暂时禁用
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
@@ -27,7 +27,7 @@ public class AiProgrammingAgentConfig {
     private final ChatModel chatModel;
     private final CodeFileTool codeFileTool;
     private final CodeAnalysisTool codeAnalysisTool;
-    private final KnowledgeBaseTool knowledgeBaseTool;
+    // private final KnowledgeBaseTool knowledgeBaseTool;  // 暂时禁用
     private final AiSupervisor aiSupervisor;
     
     /**
@@ -72,7 +72,7 @@ public class AiProgrammingAgentConfig {
         return dev.langchain4j.service.AiServices.builder(AiProgrammingAgent.class)
             .chatModel(chatModel)
             .chatMemory(chatMemory)
-            .tools(codeFileTool, codeAnalysisTool, knowledgeBaseTool)
+            .tools(codeFileTool, codeAnalysisTool)  // knowledgeBaseTool 暂时禁用
             .build();
     }
 }
