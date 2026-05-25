@@ -7,7 +7,7 @@ import com.yourcompany.langchain4j.tool.CodeFileTool;
 import com.yourcompany.langchain4j.tool.KnowledgeBaseTool;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.TokenWindowChatMemory;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
@@ -24,7 +24,7 @@ import org.springframework.context.annotation.Configuration;
 @RequiredArgsConstructor
 public class AiProgrammingAgentConfig {
     
-    private final ChatLanguageModel chatLanguageModel;
+    private final ChatModel chatModel;
     private final CodeFileTool codeFileTool;
     private final CodeAnalysisTool codeAnalysisTool;
     private final KnowledgeBaseTool knowledgeBaseTool;
@@ -72,7 +72,7 @@ public class AiProgrammingAgentConfig {
         log.info("初始化 AI 编程 Agent");
         
         return dev.langchain4j.service.AiServices.builder(AiProgrammingAgent.class)
-            .chatLanguageModel(chatLanguageModel)
+            .chatModel(chatModel)
             .chatMemory(chatMemory)
             .tools(codeFileTool, codeAnalysisTool, knowledgeBaseTool)
             .build();
