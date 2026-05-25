@@ -9,6 +9,15 @@ langchain4j.open-ai.chat-model.base-url=https://dashscope.aliyuncs.com/compatibl
 langchain4j.open-ai.chat-model.model-name=qwen-max
 langchain4j.open-ai.chat-model.temperature=0.7
 langchain4j.open-ai.chat-model.timeout=PT60S
+langchain4j.open-ai.chat-model.log-requests=true
+langchain4j.open-ai.chat-model.log-responses=true
+
+# AI 监管配置
+ai.supervisor.max-tokens-per-request=10000
+ai.supervisor.max-tokens-per-hour=100000
+ai.supervisor.max-tokens-per-day=1000000
+ai.supervisor.max-concurrent-requests=10
+ai.supervisor.alert-threshold=0.8
 
 # 日志配置
 logging.level.dev.langchain4j=DEBUG
