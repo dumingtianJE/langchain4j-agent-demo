@@ -6,7 +6,7 @@ import com.yourcompany.langchain4j.tool.CodeAnalysisTool;
 import com.yourcompany.langchain4j.tool.CodeFileTool;
 import com.yourcompany.langchain4j.tool.KnowledgeBaseTool;
 import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.TokenWindowChatMemory;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
@@ -41,34 +41,24 @@ public class AiProgrammingAgentConfig {
     
     /**
      * 配置 Embedding 模型
-     * 使用通义千问的 Embedding 服务（OpenAI 兼容接口）
+     * 使用本地嵌入模型（无需 API Key）
      */
     @Bean
     public EmbeddingModel embeddingModel() {
-        log.info("初始化 Embedding 模型 (text-embedding-v3)");
+        log.info("初始化本地 Embedding 模型 (all-minilm-l6-v2)");
         
-        // 使用 OpenAI 兼容接口调用通义千问 Embedding
-        return new dev.langchain4j.model.openai.OpenAiEmbeddingModel(
-            "sk-b1095efa41cf4fee82ef4e13ae6a6c9f",  // API Key
-            null,  // organization ID
-            null,  // user
-            "https://dashscope.aliyuncs.com/compatible-mode/v1",  // Base URL
-            "text-embedding-v3",  // Model name
-            null,  // dimensions
-            null,  // timeout
-            0,     // max retries
-            null,  // log requests
-            null   // log responses
-        );
+        // 使用本地嵌入模型，不需要 API Key
+        return new dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel();
     }
     
     /**
      * 配置 Chat Memory（对话记忆）
-     * 使用 Token 窗口记忆，保留最近的对话上下文
+     * 使用消息窗口记忆，保留最近的消息
      */
     @Bean
     public ChatMemory chatMemory() {
-        return TokenWindowChatMemory.withMaxTokens(8000);
+        log.info("初始化 Chat Memory (最多 20 条消息)");
+        return MessageWindowChatMemory.withMaxMessages(20);
     }
     
     /**
