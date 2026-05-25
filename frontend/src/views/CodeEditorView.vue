@@ -262,7 +262,20 @@ const scrollToBottom = () => {
 
 <style scoped>
 .editor-container {
-  padding: 20px;
+  padding: 30px;
+  height: calc(100vh - 40px);
+}
+
+.editor-card {
+  height: 100%;
+  background: var(--card-bg);
+  border: 1px solid var(--border-glow);
+  backdrop-filter: blur(10px);
+}
+
+:deep(.el-card__header) {
+  border-bottom: 1px solid var(--border-glow);
+  background: rgba(5, 8, 17, 0.5);
 }
 
 .card-header {
@@ -273,23 +286,48 @@ const scrollToBottom = () => {
 
 .card-header h2 {
   margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .header-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+}
+
+:deep(.el-button) {
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
 }
 
 .file-tree-card,
 .code-editor-card,
 .ai-chat-card {
   height: 100%;
+  background: rgba(16, 22, 58, 0.4);
+  border: 1px solid var(--border-glow);
+}
+
+:deep(.el-tree) {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+:deep(.el-tree-node__content:hover) {
+  background: rgba(0, 242, 254, 0.1);
 }
 
 .tree-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-weight: 600;
+  color: var(--neon-blue);
 }
 
 .editor-info {
@@ -297,45 +335,95 @@ const scrollToBottom = () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
-  padding: 8px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  padding: 12px;
+  background: rgba(5, 8, 17, 0.6);
+  border-radius: 8px;
+  border: 1px solid var(--border-glow);
+  font-size: 14px;
 }
 
-.code-textarea {
-  font-family: 'Courier New', monospace;
+:deep(.el-textarea__inner) {
+  background: rgba(5, 8, 17, 0.8);
+  border: 1px solid var(--border-glow);
+  color: var(--text-primary);
+  font-family: 'Fira Code', 'Courier New', monospace;
   font-size: 14px;
+  line-height: 1.6;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+:deep(.el-textarea__inner:focus) {
+  border-color: var(--neon-blue);
+  box-shadow: 0 0 20px rgba(0, 242, 254, 0.2);
 }
 
 .chat-messages {
   height: 300px;
   overflow-y: auto;
-  padding: 12px;
-  background: #fafafa;
-  border-radius: 4px;
-  margin-bottom: 12px;
+  padding: 16px;
+  background: rgba(5, 8, 17, 0.6);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-glow);
 }
 
 .chat-msg {
   margin-bottom: 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  line-height: 1.5;
+  padding: 12px 16px;
+  border-radius: 12px;
+  line-height: 1.6;
   word-wrap: break-word;
+  animation: fadeIn 0.3s ease-out;
 }
 
 .chat-msg.user {
-  background: #409eff;
+  background: linear-gradient(135deg, rgba(240, 147, 251, 0.2), rgba(245, 87, 108, 0.2));
+  border: 1px solid rgba(240, 147, 251, 0.3);
   color: white;
 }
 
 .chat-msg.assistant {
-  background: white;
-  border: 1px solid #e4e7ed;
+  background: rgba(16, 22, 58, 0.6);
+  border: 1px solid var(--border-glow);
+  color: var(--text-primary);
 }
 
 .chat-input {
-  border-top: 1px solid #e4e7ed;
-  padding-top: 12px;
+  border-top: 1px solid var(--border-glow);
+  padding-top: 16px;
+}
+
+/* 滚动条 */
+:deep(.el-textarea__inner)::-webkit-scrollbar,
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+:deep(.el-textarea__inner)::-webkit-scrollbar-track,
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:deep(.el-textarea__inner)::-webkit-scrollbar-thumb,
+.chat-messages::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--neon-blue), var(--neon-purple));
+  border-radius: 3px;
+}
+
+/* 对话框样式 */
+:deep(.el-dialog) {
+  background: var(--card-bg);
+  border: 1px solid var(--border-glow);
+  backdrop-filter: blur(10px);
+}
+
+:deep(.el-dialog__header) {
+  border-bottom: 1px solid var(--border-glow);
+}
+
+:deep(.el-dialog__title) {
+  color: var(--neon-blue);
+  font-weight: 700;
 }
 </style>
