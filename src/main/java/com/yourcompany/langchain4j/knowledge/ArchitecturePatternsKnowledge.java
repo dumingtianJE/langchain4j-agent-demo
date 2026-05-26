@@ -1,20 +1,22 @@
 package com.yourcompany.langchain4j.knowledge;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 /**
  * 技术架构模范代码知识库
  * 补充微服务、分布式系统、云原生等架构模式的高质量代码示例
+ * 
+ * 注意：文档内容中不使用 Markdown 代码块标记（```），避免 Java 编译错误
  */
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class ArchitecturePatternsKnowledge implements CommandLineRunner {
     
     private final KnowledgeBaseManager knowledgeBaseManager;
-    
-    public ArchitecturePatternsKnowledge(KnowledgeBaseManager knowledgeBaseManager) {
-        this.knowledgeBaseManager = knowledgeBaseManager;
-    }
     
     @Override
     public void run(String... args) {
@@ -25,17 +27,15 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
         // 1. 微服务架构 - 服务间通信
         knowledgeBaseManager.addDocument(new KnowledgeDocument(
             "microservice-communication-patterns",
-            "微服务架构：服务间通信完整示例",
+            "微服务架构：服务间通信完整示例（包含 REST/Feign、RabbitMQ、Resilience4j）",
             """
-            【微服务通信模式】
+            【微服务通信模式完整示例】
             
-            ## 1. 同步通信 - REST API + Feign Client
+            【1. 同步通信 - REST API + Feign Client】
             
-            \`\`\`java
-            // 订单服务调用用户服务
+            // Feign Client 定义
             @FeignClient(name = "user-service", url = "${services.user-service.url}")
             public interface UserClient {
-                
                 @GetMapping("/api/users/{id}")
                 UserDTO getUserById(@PathVariable("id") Long id);
                 
@@ -68,11 +68,9 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     return OrderDTO.fromEntity(orderRepository.save(order));
                 }
             }
-            \`\`\`
             
-            ## 2. 异步通信 - Spring Events + RabbitMQ
+            【2. 异步通信 - Spring Events + RabbitMQ】
             
-            \`\`\`java
             // 事件定义
             @Data
             @Builder
@@ -96,10 +94,8 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     
                     // 发布本地事件
                     eventPublisher.publishEvent(new OrderCreatedEvent(
-                        order.getId(),
-                        order.getUserId(),
-                        order.getTotalAmount(),
-                        LocalDateTime.now()
+                        order.getId(), order.getUserId(),
+                        order.getTotalAmount(), LocalDateTime.now()
                     ));
                     
                     // 发送消息到 MQ（用于跨服务通信）
@@ -110,9 +106,7 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                         .build();
                     
                     rabbitTemplate.convertAndSend(
-                        "order.exchange",
-                        "order.created",
-                        message
+                        "order.exchange", "order.created", message
                     );
                     
                     return OrderDTO.fromEntity(order);
@@ -128,16 +122,13 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                 @RabbitListener(queues = "${rabbitmq.queues.order-created}")
                 public void handleOrderCreated(OrderMessage message) {
                     log.info("收到订单创建消息: {}", message.getOrderId());
-                    
                     // 扣减库存
                     inventoryService.deductStock(message.getOrderId());
                 }
             }
-            \`\`\`
             
-            ## 3. 服务熔断 - Resilience4j
+            【3. 服务熔断 - Resilience4j】
             
-            \`\`\`java
             @Service
             @RequiredArgsConstructor
             public class ProductService {
@@ -166,10 +157,8 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     );
                 }
             }
-            \`\`\`
             
-            ## 配置示例 (application.yml)
-            \`\`\`yaml
+            【配置示例 application.yml】
             resilience4j:
               circuitbreaker:
                 instances:
@@ -189,15 +178,13 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                 instances:
                   productService:
                     timeoutDuration: 2s
-            \`\`\`
             
-            ## 关键要点
-            
-            1. **同步通信**：适用于强一致性场景（查询、验证）
-            2. **异步通信**：适用于最终一致性场景（通知、日志、统计）
-            3. **熔断降级**：防止级联故障，提升系统可用性
-            4. **超时控制**：避免线程阻塞，保护系统资源
-            5. **幂等性**：消息处理必须支持重试
+            【关键要点】
+            1. 同步通信：适用于强一致性场景（查询、验证）
+            2. 异步通信：适用于最终一致性场景（通知、日志、统计）
+            3. 熔断降级：防止级联故障，提升系统可用性
+            4. 超时控制：避免线程阻塞，保护系统资源
+            5. 幂等性：消息处理必须支持重试
             """,
             "代码示例",
             new String[]{"microservice", "communication", "feign", "rabbitmq", "resilience4j"},
@@ -212,13 +199,12 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
         // 2. 分布式缓存 - Redis 高级应用
         knowledgeBaseManager.addDocument(new KnowledgeDocument(
             "distributed-cache-redis-patterns",
-            "分布式缓存：Redis 高级应用模式",
+            "分布式缓存：Redis 高级应用模式（分布式锁、布隆过滤器、限流器）",
             """
-            【Redis 高级应用模式】
+            【Redis 高级应用模式完整示例】
             
-            ## 1. 分布式锁
+            【1. 分布式锁】
             
-            \`\`\`java
             @Service
             @RequiredArgsConstructor
             public class DistributedLockService {
@@ -237,13 +223,11 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                  * 释放分布式锁（Lua 脚本保证原子性）
                  */
                 public boolean releaseLock(String lockKey, String requestId) {
-                    String script = """
-                        if redis.call("get", KEYS[1]) == ARGV[1] then
-                            return redis.call("del", KEYS[1])
-                        else
-                            return 0
-                        end
-                        """;
+                    String script = "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+                        "return redis.call('del', KEYS[1]) " +
+                        "else " +
+                        "return 0 " +
+                        "end";
                     
                     Long result = redisTemplate.execute(
                         new DefaultRedisScript<>(script, Long.class),
@@ -274,24 +258,19 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     }
                 }
             }
-            \`\`\`
             
-            ## 2. 缓存穿透保护（布隆过滤器）
+            【2. 缓存穿透保护（布隆过滤器）】
             
-            \`\`\`java
             @Service
             @RequiredArgsConstructor
             public class BloomFilterService {
                 private final RedissonClient redissonClient;
-                
                 private RBloomFilter<String> bloomFilter;
                 
                 @PostConstruct
                 public void init() {
                     bloomFilter = redissonClient.getBloomFilter("product:bloom");
                     bloomFilter.tryInit(1000000L, 0.01); // 预期100万元素，1%误判率
-                    
-                    // 加载已有数据
                     loadExistingData();
                 }
                 
@@ -329,9 +308,7 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     if (product == null) {
                         // 缓存空值，防止穿透
                         redisTemplate.opsForValue().set(
-                            "product:" + productId, 
-                            null, 
-                            5, TimeUnit.MINUTES
+                            "product:" + productId, null, 5, TimeUnit.MINUTES
                         );
                         return null;
                     }
@@ -339,19 +316,15 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     // 4. 写入缓存
                     ProductDTO dto = ProductDTO.fromEntity(product);
                     redisTemplate.opsForValue().set(
-                        "product:" + productId, 
-                        dto, 
-                        30, TimeUnit.MINUTES
+                        "product:" + productId, dto, 30, TimeUnit.MINUTES
                     );
                     
                     return dto;
                 }
             }
-            \`\`\`
             
-            ## 3. 限流器（令牌桶算法）
+            【3. 限流器（令牌桶算法）】
             
-            \`\`\`java
             @Service
             @RequiredArgsConstructor
             public class RateLimiterService {
@@ -361,30 +334,24 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                  * 令牌桶限流
                  */
                 public boolean tryAcquire(String key, int maxTokens, int refillRate) {
-                    String script = """
-                        local key = KEYS[1]
-                        local maxTokens = tonumber(ARGV[1])
-                        local refillRate = tonumber(ARGV[2])
-                        local now = tonumber(redis.call('TIME')[1])
-                        
-                        local bucket = redis.call('HMGET', key, 'tokens', 'lastRefill')
-                        local tokens = tonumber(bucket[1]) or maxTokens
-                        local lastRefill = tonumber(bucket[2]) or now
-                        
-                        -- 计算新增令牌
-                        local elapsed = now - lastRefill
-                        local newTokens = math.floor(elapsed * refillRate)
-                        tokens = math.min(maxTokens, tokens + newTokens)
-                        
-                        if tokens > 0 then
-                            tokens = tokens - 1
-                            redis.call('HMSET', key, 'tokens', tokens, 'lastRefill', now)
-                            redis.call('EXPIRE', key, 60)
-                            return 1
-                        else
-                            return 0
-                        end
-                        """;
+                    String script = "local key = KEYS[1] " +
+                        "local maxTokens = tonumber(ARGV[1]) " +
+                        "local refillRate = tonumber(ARGV[2]) " +
+                        "local now = tonumber(redis.call('TIME')[1]) " +
+                        "local bucket = redis.call('HMGET', key, 'tokens', 'lastRefill') " +
+                        "local tokens = tonumber(bucket[1]) or maxTokens " +
+                        "local lastRefill = tonumber(bucket[2]) or now " +
+                        "local elapsed = now - lastRefill " +
+                        "local newTokens = math.floor(elapsed * refillRate) " +
+                        "tokens = math.min(maxTokens, tokens + newTokens) " +
+                        "if tokens > 0 then " +
+                        "tokens = tokens - 1 " +
+                        "redis.call('HMSET', key, 'tokens', tokens, 'lastRefill', now) " +
+                        "redis.call('EXPIRE', key, 60) " +
+                        "return 1 " +
+                        "else " +
+                        "return 0 " +
+                        "end";
                     
                     Long result = redisTemplate.execute(
                         new DefaultRedisScript<>(script, Long.class),
@@ -396,38 +363,27 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     return result == 1;
                 }
             }
-            \`\`\`
             
-            ## 4. 分布式计数器
+            【4. 分布式计数器】
             
-            \`\`\`java
             @Service
             @RequiredArgsConstructor
             public class DistributedCounterService {
                 private final StringRedisTemplate redisTemplate;
                 
-                /**
-                 * 原子递增
-                 */
                 public Long increment(String key, long delta) {
                     return redisTemplate.opsForValue().increment(key, delta);
                 }
                 
-                /**
-                 * 带过期时间的计数器
-                 */
                 public Long incrementWithExpire(String key, long delta, long seconds) {
                     Long value = redisTemplate.opsForValue().increment(key, delta);
                     if (value != null && value == delta) {
-                        // 第一次创建，设置过期时间
                         redisTemplate.expire(key, seconds, TimeUnit.SECONDS);
                     }
                     return value;
                 }
                 
-                /**
-                 * 使用示例：接口调用次数统计
-                 */
+                // 使用示例：接口调用次数统计
                 public boolean checkApiLimit(String userId, int limit) {
                     String key = "api:limit:" + userId + ":" + LocalDate.now();
                     Long count = incrementWithExpire(key, 1, 86400);
@@ -435,19 +391,16 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     if (count != null && count > limit) {
                         throw new BusinessException("今日 API 调用次数已达上限");
                     }
-                    
                     return true;
                 }
             }
-            \`\`\`
             
-            ## 关键要点
-            
-            1. **分布式锁**：使用 Lua 脚本保证释放锁的原子性
-            2. **缓存穿透**：布隆过滤器 + 空值缓存
-            3. **缓存雪崩**：随机过期时间 + 互斥锁
-            4. **缓存击穿**：逻辑过期 + 异步刷新
-            5. **限流保护**：令牌桶/漏桶算法
+            【关键要点】
+            1. 分布式锁：使用 Lua 脚本保证释放锁的原子性
+            2. 缓存穿透：布隆过滤器 + 空值缓存
+            3. 缓存雪崩：随机过期时间 + 互斥锁
+            4. 缓存击穿：逻辑过期 + 异步刷新
+            5. 限流保护：令牌桶/漏桶算法
             """,
             "代码示例",
             new String[]{"redis", "distributed-cache", "distributed-lock", "bloom-filter", "rate-limiter"},
@@ -462,14 +415,13 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
         // 3. 消息队列 - 高级应用模式
         knowledgeBaseManager.addDocument(new KnowledgeDocument(
             "message-queue-advanced-patterns",
-            "消息队列：高级应用模式（Kafka/RabbitMQ）",
+            "消息队列：高级应用模式（Kafka/RabbitMQ 可靠性、延迟队列、顺序消息）",
             """
-            【消息队列高级应用模式】
+            【消息队列高级应用模式完整示例】
             
-            ## 1. 消息可靠性保证
+            【1. 消息可靠性保证】
             
-            \`\`\`java
-            // 生产者配置
+            // 生产者配置 application.yml
             spring:
               rabbitmq:
                 publisher-confirm-type: correlated  # 开启确认模式
@@ -506,21 +458,13 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     CorrelationData correlationData = new CorrelationData(
                         UUID.randomUUID().toString()
                     );
-                    
-                    rabbitTemplate.convertAndSend(
-                        exchange, 
-                        routingKey, 
-                        message,
-                        correlationData
-                    );
+                    rabbitTemplate.convertAndSend(exchange, routingKey, message, correlationData);
                 }
             }
-            \`\`\`
             
-            ## 2. 消费者手动确认
+            【2. 消费者手动确认】
             
-            \`\`\`java
-            // 消费者配置
+            // 消费者配置 application.yml
             spring:
               rabbitmq:
                 listener:
@@ -541,8 +485,7 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     try {
                         // 反序列化消息
                         OrderMessage orderMsg = JsonUtils.parse(
-                            new String(message.getBody()), 
-                            OrderMessage.class
+                            new String(message.getBody()), OrderMessage.class
                         );
                         
                         // 处理消息（幂等性检查）
@@ -574,11 +517,9 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                     }
                 }
             }
-            \`\`\`
             
-            ## 3. 延迟队列
+            【3. 延迟队列】
             
-            \`\`\`java
             // 使用死信队列实现延迟
             @Configuration
             public class DelayQueueConfig {
@@ -603,9 +544,7 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
             // 发送延迟消息
             public void sendDelayMessage(OrderMessage message) {
                 rabbitTemplate.convertAndSend(
-                    "order.delay.exchange",
-                    "order.delay",
-                    message
+                    "order.delay.exchange", "order.delay", message
                     // 消息会自动在 30 分钟后转发到死信队列
                 );
             }
@@ -613,17 +552,13 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
             // 监听超时订单
             @RabbitListener(queues = "order.timeout.queue")
             public void handleTimeoutOrder(OrderMessage message) {
-                // 检查订单状态
                 if (orderService.isPending(message.getOrderId())) {
-                    // 取消超时订单
                     orderService.cancelOrder(message.getOrderId());
                 }
             }
-            \`\`\`
             
-            ## 4. 消息顺序性保证
+            【4. 消息顺序性保证】
             
-            \`\`\`java
             // Kafka 顺序消息
             @Service
             public class OrderedMessageProducer {
@@ -636,29 +571,23 @@ public class ArchitecturePatternsKnowledge implements CommandLineRunner {
                         event.getOrderId(), // key - 保证分区一致
                         event
                     );
-                    
                     kafkaTemplate.send(record);
                 }
             }
             
             // 顺序消费
-            @KafkaListener(
-                topics = "order-events",
-                concurrency = "1" // 单线程消费保证顺序
-            )
+            @KafkaListener(topics = "order-events", concurrency = "1")
             public void consumeOrderEvent(OrderEvent event) {
                 // 按顺序处理订单事件
                 orderEventProcessor.process(event);
             }
-            \`\`\`
             
-            ## 关键要点
-            
-            1. **可靠性**：生产者确认 + 消费者手动确认 + 持久化
-            2. **幂等性**：唯一消息 ID + 去重表
-            3. **顺序性**：相同 key 路由到同一分区 + 单线程消费
-            4. **延迟处理**：死信队列 / 延迟插件
-            5. **死信处理**：失败消息转移到死信队列人工处理
+            【关键要点】
+            1. 可靠性：生产者确认 + 消费者手动确认 + 持久化
+            2. 幂等性：唯一消息 ID + 去重表
+            3. 顺序性：相同 key 路由到同一分区 + 单线程消费
+            4. 延迟处理：死信队列 / 延迟插件
+            5. 死信处理：失败消息转移到死信队列人工处理
             """,
             "代码示例",
             new String[]{"message-queue", "kafka", "rabbitmq", "reliability", "delay-queue"},
