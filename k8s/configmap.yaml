@@ -25,6 +25,27 @@ data:
   AI_MILVUS_HOST: "milvus-service"
   AI_MILVUS_PORT: "19530"
   
+  # PostgreSQL 数据库配置（可选，替代 H2）
+  POSTGRES_DB: "agent_db"
+  # SPRING_DATASOURCE_URL: "jdbc:postgresql://postgresql-service:5432/agent_db"
+  # SPRING_DATASOURCE_USERNAME: "admin"
+  # SPRING_DATASOURCE_PASSWORD: "your-password"  # 从 Secret 读取
+  
+  # Redis Sentinel 配置（可选，替代单机 Redis）
+  SPRING_REDIS_SENTINEL_MASTER: "mymaster"
+  # SPRING_REDIS_SENTINEL_NODES: "redis-sentinel-0.redis-sentinel-service:26379,redis-sentinel-1.redis-sentinel-service:26379,redis-sentinel-2.redis-sentinel-service:26379"
+  
+  # RabbitMQ 消息队列配置（可选）
+  # SPRING_RABBITMQ_HOST: "rabbitmq-service"
+  # SPRING_RABBITMQ_PORT: "5672"
+  # SPRING_RABBITMQ_USERNAME: "guest"  # 从 Secret 读取
+  # SPRING_RABBITMQ_PASSWORD: "guest"  # 从 Secret 读取
+  # SPRING_RABBITMQ_LISTENER_SIMPLE_CONCURRENCY: "5"
+  # SPRING_RABBITMQ_LISTENER_SIMPLE_MAX_CONCURRENCY: "10"
+  
+  # Elasticsearch 日志系统配置（可选）
+  # SPRING_ELASTICSEARCH_URIS: "http://elasticsearch:9200"
+  
   # JWT 配置
   JWT_EXPIRATION: "86400"
   

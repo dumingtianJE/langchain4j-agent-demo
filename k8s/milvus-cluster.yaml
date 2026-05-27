@@ -1,0 +1,233 @@
+# Milvus 集群模式部署（生产环境）
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: milvus-config
+  namespace: langchain4j-agent
+data:
+  milvus.yaml: |
+    # etcd 配置
+    etcd:
+      endpoints:
+        - etcd-0.etcd:2379
+        - etcd-1.etcd:2379
+        - etcd-2.etcd:2379
+    
+    # MinIO 配置
+    minio:
+      address: minio
+      port: 9000
+      accessKeyID: minioadmin
+      secretAccessKey: minioadmin
+      useSSL: false
+      bucketName: milvus-bucket
+    
+    # 索引配置
+    knowhere:
+      index:
+        build_thread_num: 8
+    
+    # 查询节点配置
+    queryNode:
+      dataSync:
+        flowGraph:
+          maxQueueLength: 1024
+          maxParallelism: 1024
+      stats:
+        publishInterval: 1000
+    
+    # 数据节点配置
+    dataNode:
+      dataSync:
+        flowGraph:
+          maxQueueLength: 1024
+          maxParallelism: 1024
+    
+    # 代理配置
+    proxy:
+      http:
+        enabled: true
+      port: 19530
+    
+    # 日志配置
+    log:
+      level: info
+      file:
+        rootPath: /var/lib/milvus/logs
+---
+# Milvus Query Node Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-querynode
+  namespace: langchain4j-agent
+  labels:
+    app: milvus
+    component: querynode
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: milvus
+      component: querynode
+  template:
+    metadata:
+      labels:
+        app: milvus
+        component: querynode
+    spec:
+      containers:
+        - name: querynode
+          image: milvusdb/milvus:v2.3.0
+          command: ["milvus", "run", "querynode"]
+          ports:
+            - containerPort: 21123
+          env:
+            - name: ETCD_ENDPOINTS
+              value: "etcd-0.etcd:2379,etcd-1.etcd:2379,etcd-2.etcd:2379"
+            - name: MINIO_ADDRESS
+              value: "minio:9000"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          volumeMounts:
+            - name: milvus-config
+              mountPath: /milvus/configs
+      volumes:
+        - name: milvus-config
+          configMap:
+            name: milvus-config
+---
+# Milvus Data Node Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-datanode
+  namespace: langchain4j-agent
+  labels:
+    app: milvus
+    component: datanode
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: milvus
+      component: datanode
+  template:
+    metadata:
+      labels:
+        app: milvus
+        component: datanode
+    spec:
+      containers:
+        - name: datanode
+          image: milvusdb/milvus:v2.3.0
+          command: ["milvus", "run", "datanode"]
+          ports:
+            - containerPort: 21124
+          env:
+            - name: ETCD_ENDPOINTS
+              value: "etcd-0.etcd:2379,etcd-1.etcd:2379,etcd-2.etcd:2379"
+            - name: MINIO_ADDRESS
+              value: "minio:9000"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          volumeMounts:
+            - name: milvus-config
+              mountPath: /milvus/configs
+      volumes:
+        - name: milvus-config
+          configMap:
+            name: milvus-config
+---
+# Milvus Proxy Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-proxy
+  namespace: langchain4j-agent
+  labels:
+    app: milvus
+    component: proxy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: milvus
+      component: proxy
+  template:
+    metadata:
+      labels:
+        app: milvus
+        component: proxy
+    spec:
+      containers:
+        - name: proxy
+          image: milvusdb/milvus:v2.3.0
+          command: ["milvus", "run", "proxy"]
+          ports:
+            - containerPort: 19530
+              name: grpc
+            - containerPort: 9091
+              name: http
+          env:
+            - name: ETCD_ENDPOINTS
+              value: "etcd-0.etcd:2379,etcd-1.etcd:2379,etcd-2.etcd:2379"
+            - name: MINIO_ADDRESS
+              value: "minio:9000"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9091
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9091
+            initialDelaySeconds: 20
+            periodSeconds: 5
+          volumeMounts:
+            - name: milvus-config
+              mountPath: /milvus/configs
+      volumes:
+        - name: milvus-config
+          configMap:
+            name: milvus-config
+---
+# Milvus Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-service
+  namespace: langchain4j-agent
+  labels:
+    app: milvus
+spec:
+  selector:
+    app: milvus
+    component: proxy
+  ports:
+    - port: 19530
+      targetPort: 19530
+      name: grpc
+    - port: 9091
+      targetPort: 9091
+      name: http
+  type: ClusterIP
