@@ -1,0 +1,96 @@
+# Milvus Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus
+  namespace: langchain4j-agent
+  labels:
+    app: milvus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus
+  template:
+    metadata:
+      labels:
+        app: milvus
+    spec:
+      containers:
+        - name: milvus
+          image: milvusdb/milvus:v2.3.0
+          ports:
+            - containerPort: 19530
+              name: grpc
+            - containerPort: 9091
+              name: http
+          command: ["milvus", "run", "standalone"]
+          env:
+            - name: ETCD_USE_EMBED
+              value: "true"
+            - name: ETCD_DATA_DIR
+              value: "/var/lib/milvus/etcd"
+            - name: MINIO_ACCESS_KEY
+              value: "minioadmin"
+            - name: MINIO_SECRET_KEY
+              value: "minioadmin"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9091
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9091
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          volumeMounts:
+            - name: milvus-data
+              mountPath: /var/lib/milvus
+      volumes:
+        - name: milvus-data
+          persistentVolumeClaim:
+            claimName: milvus-pvc
+---
+# Milvus Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-service
+  namespace: langchain4j-agent
+  labels:
+    app: milvus
+spec:
+  selector:
+    app: milvus
+  ports:
+    - port: 19530
+      targetPort: 19530
+      name: grpc
+    - port: 9091
+      targetPort: 9091
+      name: http
+  type: ClusterIP
+---
+# Milvus PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: milvus-pvc
+  namespace: langchain4j-agent
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi

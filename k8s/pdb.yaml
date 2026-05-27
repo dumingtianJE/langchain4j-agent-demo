@@ -1,0 +1,16 @@
+# Pod 中断预算
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: langchain4j-agent-pdb
+  namespace: langchain4j-agent
+  labels:
+    app: langchain4j-agent
+spec:
+  # 最小可用 Pod 数量
+  minAvailable: 1
+  # 或者使用最大不可用数量
+  # maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: langchain4j-agent

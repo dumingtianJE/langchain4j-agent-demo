@@ -1,0 +1,42 @@
+# 应用配置 ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: langchain4j-agent
+  labels:
+    app: langchain4j-agent
+data:
+  # Spring Boot 配置
+  SPRING_PROFILES_ACTIVE: "production"
+  
+  # 数据库配置
+  SPRING_DATASOURCE_URL: "jdbc:h2:file:/app/data/ai-agent-db;DB_CLOSE_ON_EXIT=FALSE"
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "20"
+  SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "5"
+  
+  # Redis 配置
+  SPRING_REDIS_HOST: "redis-service"
+  SPRING_REDIS_PORT: "6379"
+  SPRING_REDIS_TIMEOUT: "5000"
+  
+  # Milvus 向量数据库配置
+  AI_EMBEDDING_TYPE: "milvus"
+  AI_MILVUS_HOST: "milvus-service"
+  AI_MILVUS_PORT: "19530"
+  
+  # JWT 配置
+  JWT_EXPIRATION: "86400"
+  
+  # API 限流配置
+  AI_RATELIMIT_ENABLED: "true"
+  AI_RATELIMIT_REQUESTS_PER_MINUTE: "100"
+  AI_RATELIMIT_BURST_CAPACITY: "150"
+  
+  # 日志配置
+  LOGGING_LEVEL_COM_YOURCOMPANY: "INFO"
+  LOGGING_LEVEL_DEV_LANGCHAIN4J: "INFO"
+  LOGGING_FILE_NAME: "/app/logs/application.log"
+  
+  # JVM 参数
+  JAVA_OPTS: "-Xms512m -Xmx1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"

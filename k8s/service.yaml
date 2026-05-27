@@ -1,0 +1,22 @@
+# 应用 Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: langchain4j-agent-service
+  namespace: langchain4j-agent
+  labels:
+    app: langchain4j-agent
+  annotations:
+    # 用于 Prometheus 服务发现
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+spec:
+  selector:
+    app: langchain4j-agent
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+      protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None

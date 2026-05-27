@@ -1,0 +1,8 @@
+# Kubernetes 命名空间
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: langchain4j-agent
+  labels:
+    name: langchain4j-agent
+    environment: production
