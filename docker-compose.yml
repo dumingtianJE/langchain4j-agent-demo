@@ -10,13 +10,47 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # 应用配置
       - SPRING_PROFILES_ACTIVE=production
+      
+      # AI 模型配置
       - LANGCHAIN4J_OPEN_AI_CHAT_MODEL_API_KEY=${DASHSCOPE_API_KEY}
-      - SPRING_DATASOURCE_URL=jdbc:h2:file:/app/data/ai-agent-db
+      - LANGCHAIN4J_OPEN_AI_CHAT_MODEL_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+      - LANGCHAIN4J_OPEN_AI_CHAT_MODEL_MODEL_NAME=qwen-max
+      
+      # 数据库配置
+      - SPRING_DATASOURCE_URL=jdbc:h2:file:/app/data/ai-agent-db;DB_CLOSE_ON_EXIT=FALSE
+      - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=20
+      - SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=5
+      
+      # Redis 配置
       - SPRING_REDIS_HOST=redis
       - SPRING_REDIS_PORT=6379
+      - SPRING_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - SPRING_REDIS_TIMEOUT=5000
+      
+      # Milvus 向量数据库配置
+      - AI_EMBEDDING_TYPE=milvus
+      - AI_MILVUS_HOST=milvus
+      - AI_MILVUS_PORT=19530
+      
+      # JWT 配置
+      - JWT_SECRET=${JWT_SECRET:-mySecretKeyForJWTTokenGenerationAndValidation123456789}
+      - JWT_EXPIRATION=86400
+      
+      # API 限流配置
+      - AI_RATELIMIT_ENABLED=true
+      - AI_RATELIMIT_REQUESTS_PER_MINUTE=100
+      - AI_RATELIMIT_BURST_CAPACITY=150
+      
+      # 日志配置
+      - LOGGING_LEVEL_COM_YOURCOMPANY=INFO
+      - LOGGING_LEVEL_DEV_LANGCHAIN4J=INFO
+      - LOGGING_FILE_NAME=/app/logs/application.log
     depends_on:
       redis:
+        condition: service_healthy
+      milvus:
         condition: service_healthy
     volumes:
       - app-data:/app/data
@@ -32,6 +66,11 @@ services:
         reservations:
           cpus: '1'
           memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Redis 缓存
   redis:
@@ -41,15 +80,105 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123} --maxmemory 512mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - app-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+
+  # Milvus 向量数据库
+  milvus:
+    image: milvusdb/milvus:v2.3.0
+    container_name: milvus-vector-db
+    ports:
+      - "19530:19530"  # gRPC 端口
+      - "9091:9091"    # HTTP 端口
+    volumes:
+      - milvus-data:/var/lib/milvus
+    environment:
+      - ETCD_USE_EMBED=true
+      - ETCD_DATA_DIR=/var/lib/milvus/etcd
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    command: ["milvus", "run", "standalone"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    networks:
+      - app-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  # Prometheus 监控
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Grafana 可视化面板
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Nginx 反向代理（可选）
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - app-network
+    restart: unless-stopped
+    profiles:
+      - production
 
 volumes:
   app-data:
@@ -57,6 +186,14 @@ volumes:
   app-logs:
     driver: local
   redis-data:
+    driver: local
+  milvus-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  nginx-logs:
     driver: local
 
 networks:
