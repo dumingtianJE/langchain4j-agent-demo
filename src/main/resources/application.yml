@@ -5,7 +5,7 @@ spring:
   
   # 数据库配置 (H2 开发环境)
   datasource:
-    url: jdbc:h2:file:./data/ai-agent-db;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:file:/app/data/ai-agent-db;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -35,9 +35,9 @@ spring:
   # Redis 配置（生产环境）
   data:
     redis:
-      host: localhost
-      port: 6379
-      password:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
       timeout: 5000
       lettuce:
         pool:
@@ -54,13 +54,13 @@ server:
 langchain4j:
   open-ai:
     chat-model:
-      api-key: sk-b1095efa41cf4fee82ef4e13ae6a6c9f
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      model-name: qwen-max
+      api-key: ${DASHSCOPE_API_KEY:sk-b1095efa41cf4fee82ef4e13ae6a6c9f}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      model-name: ${DASHSCOPE_MODEL:qwen-max}
       temperature: 0.7
       timeout: PT60S
-      log-requests: true
-      log-responses: true
+      log-requests: ${LOG_REQUESTS:false}
+      log-responses: ${LOG_RESPONSES:false}
 
 # AI 监管配置
 ai:
@@ -74,13 +74,13 @@ ai:
   # 向量存储配置
   embedding:
     type: filesystem
-    filesystem-path: ./data/embeddings
+    filesystem-path: /app/data/embeddings
     auto-save-interval: 300
   
   # Milvus 向量数据库配置（生产环境）
   milvus:
-    host: localhost
-    port: 19530
+    host: ${MILVUS_HOST:localhost}
+    port: ${MILVUS_PORT:19530}
     collection-name: ai_knowledge_embeddings
     dimension: 1024
     index-type: HNSW
@@ -99,8 +99,8 @@ ai:
 
 # JWT 配置
 jwt:
-  secret: mySecretKeyForJWTTokenGenerationAndValidation123456789
-  expiration: 86400
+  secret: ${JWT_SECRET:mySecretKeyForJWTTokenGenerationAndValidation123456789}
+  expiration: ${JWT_EXPIRATION:86400}
 
 # Prometheus 监控配置
 management:
@@ -120,11 +120,11 @@ management:
 # 日志配置
 logging:
   level:
-    dev.langchain4j: DEBUG
-    com.yourcompany: INFO
+    dev.langchain4j: ${LOG_LEVEL_LANGCHAIN4J:INFO}
+    com.yourcompany: ${LOG_LEVEL_APP:INFO}
     io.milvus: WARN
   file:
-    name: ./logs/application.log
+    name: /app/logs/application.log
     max-size: 100MB
     max-history: 30
   pattern:

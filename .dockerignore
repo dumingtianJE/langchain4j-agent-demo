@@ -11,6 +11,14 @@
 # Maven
 target/
 !.mvn/wrapper/maven-wrapper.jar
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
 
 # Logs
 logs/
@@ -27,11 +35,38 @@ Thumbs.db
 # Backup files
 *.bak
 *.back
+*.bak_*
+*.tmp
+*.swp
+*~
+code-operations.log
 
 # Docker
 Dockerfile
 docker-compose.yml
+.dockerignore
 
 # Build artifacts
 *.class
 *.jar.orig
+
+# Environment variables
+.env
+.env.*
+
+# Database files
+data/*.db
+data/*.mv.db
+
+# Frontend (if not needed in Docker build)
+frontend/
+node_modules/
+
+# Kubernetes
+k8s/
+
+# Monitoring
+monitoring/
+
+# Nginx
+nginx/

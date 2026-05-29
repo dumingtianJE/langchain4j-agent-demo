@@ -292,14 +292,8 @@ public class ContextOptimizer {
      * 获取消息内容
      */
     private String getMessageContent(ChatMessage message) {
-        if (message instanceof SystemMessage) {
-            return ((SystemMessage) message).text();
-        } else if (message instanceof UserMessage) {
-            return ((UserMessage) message).text();
-        } else if (message instanceof AiMessage) {
-            return ((AiMessage) message).text();
-        }
-        return "";
+        // 使用 toString() 获取消息内容
+        return message != null ? message.toString() : "";
     }
     
     /**

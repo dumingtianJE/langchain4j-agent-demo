@@ -1,5 +1,6 @@
 package com.yourcompany.langchain4j.knowledge;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Component;
  * 代码生成最佳实践知识库增强
  * 在系统启动时加载高质量的代码示例和最佳实践
  */
+@Slf4j
 @Component
 public class CodeGenerationBestPractices implements CommandLineRunner {
     
@@ -31,7 +33,7 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
             
             ## 1. Controller 层标准示例
             
-            \`\`\`java
+            ```java
             @RestController
             @RequestMapping("/api/users")
             @RequiredArgsConstructor
@@ -67,11 +69,11 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
                     userService.delete(id);
                 }
             }
-            \`\`\`
+            ```
             
             ## 2. Service 层事务管理
             
-            \`\`\`java
+            ```java
             @Service
             @RequiredArgsConstructor
             @Transactional(readOnly = true)
@@ -100,11 +102,11 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
                     return UserDTO.fromEntity(savedUser);
                 }
             }
-            \`\`\`
+            ```
             
             ## 3. 统一异常处理
             
-            \`\`\`java
+            ```java
             @RestControllerAdvice
             public class GlobalExceptionHandler {
                 
@@ -138,7 +140,7 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
                     return ResponseEntity.badRequest().body(error);
                 }
             }
-            \`\`\`
+            ```
             
             ## 4. 关键要点
             
@@ -169,7 +171,7 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
             
             ## 1. 策略模式（Strategy Pattern）
             
-            \`\`\`java
+            ```java
             // 策略接口
             public interface PaymentStrategy {
                 void pay(BigDecimal amount);
@@ -206,11 +208,11 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
                     strategy.pay(amount);
                 }
             }
-            \`\`\`
+            ```
             
             ## 2. 建造者模式（Builder Pattern）
             
-            \`\`\`java
+            ```java
             @Builder
             public class User {
                 private final Long id;
@@ -235,11 +237,11 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
                 .name("张三")
                 .createdAt(LocalDateTime.now())
                 .build();
-            \`\`\`
+            ```
             
             ## 3. 观察者模式（Observer Pattern）
             
-            \`\`\`java
+            ```java
             // 使用 Spring Events
             @Component
             @RequiredArgsConstructor
@@ -269,7 +271,7 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
                     // 发送短信通知
                 }
             }
-            \`\`\`
+            ```
             
             ## 使用场景
             
@@ -296,7 +298,7 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
             
             ## 1. Repository 层设计
             
-            \`\`\`java
+            ```java
             public interface UserRepository extends JpaRepository<User, Long>, 
                                                   JpaSpecificationExecutor<User> {
                 
@@ -320,12 +322,12 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
                 @Query("UPDATE User u SET u.status = :status WHERE u.id = :id")
                 int updateStatus(@Param("id") Long id, @Param("status") UserStatus status);
             }
-            \`\`\`
+            ```
             
             ## 2. 性能优化技巧
             
             ### 避免 N+1 查询问题
-            \`\`\`java
+            ```java
             // ❌ 错误示例：导致 N+1 查询
             List<Order> orders = orderRepository.findAll();
             for (Order order : orders) {
@@ -335,10 +337,10 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
             // ✅ 正确示例：使用 JOIN FETCH
             @Query("SELECT o FROM Order o JOIN FETCH o.user")
             List<Order> findAllWithUser();
-            \`\`\`
+            ```
             
             ### 使用投影减少数据传输
-            \`\`\`java
+            ```java
             // 接口投影
             public interface UserSummary {
                 Long getId();
@@ -348,11 +350,11 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
             
             @Query("SELECT u.id as id, u.name as name, u.email as email FROM User u")
             List<UserSummary> findAllSummary();
-            \`\`\`
+            ```
             
             ## 3. 批量操作
             
-            \`\`\`java
+            ```java
             @Service
             @RequiredArgsConstructor
             public class BatchService {
@@ -372,12 +374,12 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
                     }
                 }
             }
-            \`\`\`
+            ```
             
             ## 4. 配置优化
             
             application.yml:
-            \`\`\`yaml
+            ```yaml
             spring:
               jpa:
                 properties:
@@ -388,7 +390,7 @@ public class CodeGenerationBestPractices implements CommandLineRunner {
                     order_updates: true
                     generate_statistics: false
                 show-sql: false
-            \`\`\`
+            ```
             """,
             "代码示例",
             new String[]{"database", "jpa", "performance", "optimization", "spring-data"},

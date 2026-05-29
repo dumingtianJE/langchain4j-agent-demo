@@ -242,7 +242,7 @@ public class ProjectManagementController {
             @PathVariable String projectId,
             @RequestParam String query,
             @RequestParam(defaultValue = "5") int maxResults) {
-        List<SearchResult> results = 
+        List<MultiProjectKnowledgeManager.SearchResult> results = 
             multiProjectManager.searchKnowledge(projectId, query, maxResults);
         
         return ResponseEntity.ok(Map.of(

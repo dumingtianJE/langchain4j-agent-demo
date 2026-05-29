@@ -171,7 +171,7 @@ public class MultiProjectKnowledgeManager {
         }
         
         // 按相关度排序
-        allResults.sort(Comparator.comparingDouble(r -> r.getSearchResult().getScore()).reversed());
+        allResults.sort(Comparator.comparingDouble((CrossProjectResult r) -> r.searchResult.getScore()).reversed());
         
         return allResults.stream()
             .limit(maxResults)

@@ -2,8 +2,8 @@ package com.yourcompany.langchain4j.service;
 
 import com.yourcompany.langchain4j.agent.AiProgrammingAgent;
 import com.yourcompany.langchain4j.knowledge.MultiProjectKnowledgeManager;
+import com.yourcompany.langchain4j.knowledge.MultiProjectKnowledgeManager.SearchResult;
 import com.yourcompany.langchain4j.knowledge.ProjectManagementEnhancer;
-import com.yourcompany.langchain4j.knowledge.SearchResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

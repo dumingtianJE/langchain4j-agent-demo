@@ -68,19 +68,20 @@ deploy_middleware() {
     fi
     echo ""
 
-    # 5. 部署 Milvus（向量数据库）
-    info "5. 部署 Milvus（向量数据库）..."
-    sudo kubectl apply -f k8s/milvus.yaml
-    info "⏳ 等待 Milvus 启动..."
-    sleep 20
-    
-    # 验证 Milvus
-    if sudo kubectl get pods -n langchain4j-agent -l app=milvus | grep -q "Running"; then
-        info "✅ Milvus 运行正常"
-    else
-        warn "⚠️  Milvus 可能还在启动中，继续部署..."
-    fi
-    echo ""
+    # 5. 部署 Milvus（向量数据库）- 低内存环境已禁用
+    # info "5. 部署 Milvus（向量数据库）..."
+    # sudo kubectl apply -f k8s/milvus.yaml
+    # info " 等待 Milvus 启动..."
+    # sleep 20
+    # 
+    # # 验证 Milvus
+    # if sudo kubectl get pods -n langchain4j-agent -l app=milvus | grep -q "Running"; then
+    #     info "✅ Milvus 运行正常"
+    # else
+    #     warn "️  Milvus 可能还在启动中，继续部署..."
+    # fi
+    # echo ""
+    info "⏭️  跳过 Milvus（低内存环境，需要时手动启用）"
 
     # 6. 部署 PostgreSQL（关系型数据库，可选）
     info "6. 部署 PostgreSQL（可选）..."
@@ -200,9 +201,9 @@ verify_deployment() {
     sudo kubectl get pods -n langchain4j-agent -l app=redis
     echo ""
     
-    info "Milvus:"
-    sudo kubectl get pods -n langchain4j-agent -l app=milvus
-    echo ""
+    # info "Milvus:"
+    # sudo kubectl get pods -n langchain4j-agent -l app=milvus
+    # echo ""
 
     # 5. 测试应用健康检查
     info "5. 测试应用健康检查..."
@@ -239,7 +240,7 @@ verify_deployment() {
     echo ""
     echo " 中间件访问："
     echo "   Redis:     redis://redis-service:6379"
-    echo "   Milvus:    http://milvus-service:19530"
+    # echo "   Milvus:    http://milvus-service:19530"
     if [ "${DEPLOY_POSTGRESQL:-no}" == "yes" ]; then
         echo "   PostgreSQL: postgresql-service:5432"
     fi
@@ -366,7 +367,7 @@ delete_all() {
     sudo kubectl delete -f k8s/elasticsearch.yaml 2>/dev/null
     sudo kubectl delete -f k8s/rabbitmq.yaml 2>/dev/null
     sudo kubectl delete -f k8s/postgresql.yaml 2>/dev/null
-    sudo kubectl delete -f k8s/milvus.yaml 2>/dev/null
+    # sudo kubectl delete -f k8s/milvus.yaml 2>/dev/null
     sudo kubectl delete -f k8s/redis.yaml 2>/dev/null
     sudo kubectl delete -f k8s/pvc.yaml 2>/dev/null
     sudo kubectl delete -f k8s/secret.yaml 2>/dev/null

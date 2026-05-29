@@ -68,4 +68,30 @@ public class KnowledgeDocument {
      * 相关度评分（检索时使用）
      */
     private transient Double relevanceScore;
+    
+    /**
+     * 更新时间
+     */
+    private LocalDateTime updatedAt;
+    
+    /**
+     * 兼容旧版本11参数构造函数
+     */
+    public KnowledgeDocument(String id, String title, String content, String category, 
+                            String[] tags, String source, String embeddingId,
+                            LocalDateTime createdAt, LocalDateTime lastAccessedAt, 
+                            Integer accessCount, Double relevanceScore) {
+        this.id = id;
+        this.title = title;
+        this.content = content;
+        this.category = category;
+        this.tags = tags;
+        this.source = source;
+        this.embeddingId = embeddingId;
+        this.createdAt = createdAt;
+        this.lastAccessedAt = lastAccessedAt;
+        this.accessCount = accessCount;
+        this.relevanceScore = relevanceScore;
+        this.updatedAt = null;
+    }
 }

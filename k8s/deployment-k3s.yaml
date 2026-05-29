@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langchain4j-agent
+  namespace: ai-agent
+  labels:
+    app: langchain4j-agent
+    version: v1.0.0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: langchain4j-agent
+  template:
+    metadata:
+      labels:
+        app: langchain4j-agent
+        version: v1.0.0
+    spec:
+      containers:
+      - name: agent
+        image: langchain4j-agent-demo:v1.0.0
+        imagePullPolicy: IfNotPresent  # k3s 本地镜像使用 IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "k8s"
+        - name: JAVA_OPTS
+          value: >-
+            -Xms512m
+            -Xmx1024m
+            -XX:+UseG1GC
+            -XX:MaxGCPauseMillis=200
+            -XX:+UseContainerSupport
+            -XX:MaxRAMPercentage=75.0
+        envFrom:
+        - configMapRef:
+            name: agent-config
+        - secretRef:
+            name: agent-secret
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: app-data
+          mountPath: /app/data
+        - name: app-logs
+          mountPath: /app/logs
+      volumes:
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: agent-data-pvc
+      - name: app-logs
+        persistentVolumeClaim:
+          claimName: agent-logs-pvc
+      terminationGracePeriodSeconds: 60

@@ -369,7 +369,13 @@ public class KnowledgeBaseManager {
         List<TextSegment> segments = splitAndEmbed(document);
         
         // 存储到向量数据库
-        List<String> embeddingIds = embeddingStore.addAll(segments);
+        List<String> embeddingIds = new ArrayList<>();
+        for (TextSegment segment : segments) {
+            // 为每个 TextSegment 生成 embedding 并存储
+            Embedding embedding = embeddingModel.embed(segment.text()).content();
+            String id = embeddingStore.add(embedding, segment);
+            embeddingIds.add(id);
+        }
         
         // 记录第一个 embedding ID
         if (!embeddingIds.isEmpty()) {
@@ -527,14 +533,14 @@ public class KnowledgeBaseManager {
         
         // 为每个分块添加元数据
         return segments.stream()
-            .map(segment -> TextSegment.from(
-                segment.text(),
-                dev.langchain4j.data.document.Metadata.metadata()
-                    .put("docId", document.getId())
-                    .put("title", document.getTitle())
-                    .put("category", document.getCategory())
-                    .put("source", document.getSource())
-            ))
+            .map(segment -> {
+                dev.langchain4j.data.document.Metadata metadata = new dev.langchain4j.data.document.Metadata();
+                metadata.put("docId", document.getId());
+                metadata.put("title", document.getTitle());
+                metadata.put("category", document.getCategory());
+                metadata.put("source", document.getSource());
+                return TextSegment.from(segment.text(), metadata);
+            })
             .collect(Collectors.toList());
     }
 }
