@@ -13,14 +13,14 @@ COPY src ./src
 # 编译打包(跳过测试)
 RUN mvn clean package -DskipTests -B
 
-# 运行阶段 - 使用轻量级 JRE 镜像
-FROM eclipse-temurin:21-jre-alpine
+# 运行阶段 - 使用 Ubuntu 基础镜像（完整 glibc 支持 ONNX Runtime）
+FROM eclipse-temurin:21-jre-jammy
 
 # 安装 wget 用于健康检查
-RUN apk add --no-cache wget
+RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 
-# 创建非 root 用户
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# 创建非 root 用户（Ubuntu 语法）
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
 WORKDIR /app
 
@@ -43,7 +43,8 @@ ENV JAVA_OPTS="-Xms512m \
                -Djava.security.egd=file:/dev/./urandom"
 
 # Spring Boot 配置
-ENV SPRING_PROFILES_ACTIVE=production
+# 注释掉 production profile，使用默认的 application.yml
+# ENV SPRING_PROFILES_ACTIVE=production
 
 # 暴露端口
 EXPOSE 8080

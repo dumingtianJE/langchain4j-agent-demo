@@ -1,4 +1,3 @@
-
 ========================================
 开始完整部署 langchain4j-agent
 ========================================
@@ -21,14 +20,14 @@ secret/app-secret unchanged
 [INFO] ✅ Secret 已配置
 
 [INFO] 3. 配置 PVC...
-persistentvolumeclaim/app-data-pvc created
-persistentvolumeclaim/app-logs-pvc created
+persistentvolumeclaim/app-data-pvc unchanged
+persistentvolumeclaim/app-logs-pvc unchanged
 [INFO] ✅ PVC 已配置
 
 [INFO] 4. 部署 Redis...
 deployment.apps/redis created
 service/redis-service unchanged
-persistentvolumeclaim/redis-pvc created
+persistentvolumeclaim/redis-pvc unchanged
 [INFO] ⏳ 等待 Redis 启动...
 [WARN] ⚠️  Redis 可能还在启动中，继续部署...
 
@@ -81,27 +80,27 @@ ingress.networking.k8s.io/langchain4j-agent-ingress unchanged
 
 [INFO] 1. 检查 Pod 状态...
 
-NAME                                 READY   STATUS              RESTARTS   AGE
-redis-55dc64946b-6f9p9               0/1     ContainerCreating   0          46s
-langchain4j-agent-6899d77667-7bn6l   0/1     ContainerCreating   0          31s
+NAME                                 READY   STATUS             RESTARTS   AGE
+langchain4j-agent-864c9c675c-jjj94   0/1     Running            0          30s
+redis-55dc64946b-8z49q               0/1     ImagePullBackOff   0          46s
 
 [INFO] 2. 检查 Service...
 
 NAME                        TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)              AGE
-redis-service               ClusterIP   10.43.118.214   <none>        6379/TCP             3h9m
-milvus-service              ClusterIP   10.43.101.135   <none>        19530/TCP,9091/TCP   3h9m
-langchain4j-agent-service   ClusterIP   10.43.207.248   <none>        8080/TCP             3h8m
+redis-service               ClusterIP   10.43.118.214   <none>        6379/TCP             25h
+milvus-service              ClusterIP   10.43.101.135   <none>        19530/TCP,9091/TCP   25h
+langchain4j-agent-service   ClusterIP   10.43.207.248   <none>        8080/TCP             25h
 
 [INFO] 3. 检查 Ingress...
 
 NAME                        CLASS     HOSTS   ADDRESS   PORTS   AGE
-langchain4j-agent-ingress   traefik   *                 80      3h8m
+langchain4j-agent-ingress   traefik   *                 80      25h
 
 [INFO] 4. 检查中间件状态...
 
 [INFO] Redis:
-NAME                     READY   STATUS              RESTARTS   AGE
-redis-55dc64946b-6f9p9   0/1     ContainerCreating   0          47s
+NAME                     READY   STATUS             RESTARTS   AGE
+redis-55dc64946b-8z49q   0/1     ImagePullBackOff   0          47s
 
 [INFO] 5. 测试应用健康检查...
 

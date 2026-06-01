@@ -2,6 +2,7 @@ package com.yourcompany.langchain4j.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -13,10 +14,12 @@ import java.util.concurrent.TimeUnit;
 /**
  * Redis 缓存服务
  * 提供统一的缓存操作接口
+ * 仅在 RedisTemplate Bean 存在时启用（即 Redis 连接成功时）
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnBean(RedisTemplate.class)
 public class CacheService {
     
     private final RedisTemplate<String, Object> redisTemplate;

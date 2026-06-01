@@ -3,6 +3,10 @@ spring:
   application:
     name: langchain4j-agent-demo
   
+  # 允许循环依赖（临时解决方案）
+  main:
+    allow-circular-references: true
+  
   # 数据库配置 (H2 开发环境)
   datasource:
     url: jdbc:h2:file:/app/data/ai-agent-db;DB_CLOSE_ON_EXIT=FALSE

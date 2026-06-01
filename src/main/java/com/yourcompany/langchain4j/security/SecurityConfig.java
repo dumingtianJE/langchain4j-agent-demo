@@ -42,9 +42,7 @@ public class SecurityConfig {
                 // 其他所有请求
                 .anyRequest().permitAll()
             )
-            // 添加限流过滤器（在 JWT 认证之前）
-            .addFilterBefore(rateLimitFilter, JwtAuthenticationFilter.class)
-            // 添加 JWT 认证过滤器
+            // 添加 JWT 认证过滤器（在 UsernamePasswordAuthenticationFilter 之前）
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         
         return http.build();
