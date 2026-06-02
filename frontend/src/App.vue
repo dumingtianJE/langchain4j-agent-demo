@@ -42,6 +42,26 @@
           <span>技能管理</span>
           <div class="menu-glow"></div>
         </el-menu-item>
+        <el-menu-item index="/learning" class="menu-item">
+          <el-icon><Reading /></el-icon>
+          <span>学习中心</span>
+          <div class="menu-glow"></div>
+        </el-menu-item>
+        <el-menu-item index="/supervisor" class="menu-item">
+          <el-icon><Monitor /></el-icon>
+          <span>AI 监管</span>
+          <div class="menu-glow"></div>
+        </el-menu-item>
+        <el-menu-item index="/projects" class="menu-item">
+          <el-icon><FolderOpened /></el-icon>
+          <span>项目管理</span>
+          <div class="menu-glow"></div>
+        </el-menu-item>
+        <el-menu-item index="/monitoring" class="menu-item">
+          <el-icon><DataLine /></el-icon>
+          <span>系统监控</span>
+          <div class="menu-glow"></div>
+        </el-menu-item>
       </el-menu>
       
       <!-- 底部状态 -->
@@ -58,7 +78,7 @@
 </template>
 
 <script setup>
-import { HomeFilled, ChatDotRound, Edit, Collection, Star } from '@element-plus/icons-vue'
+import { HomeFilled, ChatDotRound, Edit, Collection, Star, Reading, Monitor, FolderOpened, DataLine } from '@element-plus/icons-vue'
 
 const getParticleStyle = (index) => {
   return {

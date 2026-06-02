@@ -45,8 +45,12 @@ public class KnowledgeBaseManager {
     
     @PostConstruct
     public void initializeKnowledgeBase() {
-        log.info("知识库系统初始化完成");
-        loadDefaultKnowledge();
+        try {
+            loadDefaultKnowledge();
+            log.info("知识库系统初始化完成");
+        } catch (Exception e) {
+            log.warn("默认知识库加载失败（可能因 API Key 无效或网络问题），应用将继续启动: {}", e.getMessage());
+        }
     }
     
     /**

@@ -66,6 +66,13 @@ langchain4j:
       max-retries: 3
       log-requests: ${LOG_REQUESTS:false}
       log-responses: ${LOG_RESPONSES:false}
+    streaming-chat-model:
+      api-key: ${DASHSCOPE_API_KEY:sk-b1095efa41cf4fee82ef4e13ae6a6c9f}
+      base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      model-name: ${DASHSCOPE_MODEL:qwen-max}
+      temperature: 0.7
+      timeout: PT120S
+      max-retries: 3
 
 # AI 监管配置
 ai:
@@ -108,6 +115,11 @@ ai:
     memory:
       max-messages: ${CHAT_MEMORY_MAX_MESSAGES:50}
       provider-max-messages: ${CHAT_MEMORY_PROVIDER_MAX_MESSAGES:30}
+
+# 代码编辑器工作区（Docker 内默认 /app/workspace，本地默认为当前工作目录）
+app:
+  code:
+    workspace-root: ${CODE_WORKSPACE_ROOT:}
 
 # JWT 配置
 jwt:

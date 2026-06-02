@@ -7,7 +7,7 @@
           <div class="header-actions">
             <el-button @click="loadFile">
               <el-icon><FolderOpened /></el-icon>
-              加载文件
+              加载项目
             </el-button>
             <el-button type="success" @click="saveFile" :loading="isSaving">
               <el-icon><Download /></el-icon>
@@ -24,21 +24,28 @@
       <el-row :gutter="20" style="height: calc(100vh - 200px);">
         <!-- 文件树 -->
         <el-col :span="5">
-          <el-card class="file-tree-card">
+          <el-card class="file-tree-card" v-loading="treeLoading">
             <template #header>
               <div class="tree-header">
                 <span>文件目录</span>
-                <el-button size="small" @click="refreshFiles">
+                <el-button size="small" @click="refreshFiles" :disabled="!projectRoot">
                   <el-icon><Refresh /></el-icon>
                 </el-button>
               </div>
             </template>
+            <div class="workspace-hint" v-if="workspaceRoot">
+              工作区: {{ workspaceRoot }}
+            </div>
             <el-tree
+              v-if="fileTree.length"
               :data="fileTree"
               :props="treeProps"
+              node-key="path"
               @node-click="handleFileClick"
               highlight-current
+              default-expand-all
             />
+            <el-empty v-else description="点击「加载项目」打开目录" :image-size="60" />
           </el-card>
         </el-col>
         
@@ -66,7 +73,7 @@
             <template #header>
               <span>AI 助手</span>
             </template>
-            <div class="chat-messages" ref="chatMessages">
+            <div class="chat-messages" ref="chatMessagesRef">
               <div 
                 v-for="(msg, index) in chatMessages" 
                 :key="index"
@@ -98,21 +105,29 @@
       </el-row>
     </el-card>
     
-    <!-- 加载文件对话框 -->
-    <el-dialog v-model="loadDialogVisible" title="加载文件">
-      <el-input v-model="loadFilePath" placeholder="输入文件路径，例如: src/main/java/..." />
+    <!-- 加载项目对话框 -->
+    <el-dialog v-model="loadDialogVisible" title="加载项目" width="520px">
+      <p class="dialog-tip">
+        输入项目目录路径。Docker 部署请使用 <code>/app/workspace</code> 或 <code>.</code>；
+        本地运行可使用项目绝对路径。
+      </p>
+      <el-input
+        v-model="loadFilePath"
+        placeholder="例如: . 或 /app/workspace"
+        @keyup.enter="confirmLoadProject"
+      />
       <template #footer>
         <el-button @click="loadDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmLoadFile">确定</el-button>
+        <el-button type="primary" @click="confirmLoadProject" :loading="treeLoading">确定</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { FolderOpened, Download, MagicStick, Refresh } from '@element-plus/icons-vue'
-import api from '../api'
+import { codeFile, aiChat } from '../api'
 import { ElMessage } from 'element-plus'
 
 const codeContent = ref('')
@@ -120,94 +135,117 @@ const currentFile = ref('')
 const isModified = ref(false)
 const isSaving = ref(false)
 const loadDialogVisible = ref(false)
-const loadFilePath = ref('')
+const loadFilePath = ref('.')
 const aiInput = ref('')
 const aiLoading = ref(false)
 const chatMessages = ref([])
+const chatMessagesRef = ref(null)
 
-const fileTree = ref([
-  {
-    label: 'src',
-    children: [
-      {
-        label: 'main',
-        children: [
-          { label: 'java', children: [] },
-          { label: 'resources', children: [] }
-        ]
-      },
-      {
-        label: 'test',
-        children: []
-      }
-    ]
-  }
-])
+const fileTree = ref([])
+const projectRoot = ref('')
+const workspaceRoot = ref('')
+const treeLoading = ref(false)
 
 const treeProps = {
   children: 'children',
-  label: 'label'
+  label: 'name'
 }
+
+onMounted(async () => {
+  try {
+    const res = await codeFile.getWorkspace()
+    workspaceRoot.value = res.workspaceRoot || ''
+    loadFilePath.value = '.'
+  } catch {
+    loadFilePath.value = '.'
+  }
+})
 
 const markModified = () => {
   isModified.value = true
 }
 
-const loadFile = () => {
-  loadDialogVisible.value = true
-  loadFilePath.value = ''
+const toTreeNode = (node) => {
+  if (!node) return null
+  return {
+    name: node.name,
+    path: node.path,
+    type: node.type,
+    children: node.type === 'directory' && node.children?.length
+      ? node.children.map(toTreeNode).filter(Boolean)
+      : undefined
+  }
 }
 
-const confirmLoadFile = async () => {
-  if (!loadFilePath.value) {
-    ElMessage.warning('请输入文件路径')
-    return
-  }
-  
+const loadFile = () => {
+  loadDialogVisible.value = true
+}
+
+const confirmLoadProject = async () => {
+  const path = loadFilePath.value?.trim() || '.'
+  treeLoading.value = true
   try {
-    const response = await api.get(`/code/read?path=${encodeURIComponent(loadFilePath.value)}`)
-    codeContent.value = response.content || response.code || ''
-    currentFile.value = loadFilePath.value
-    isModified.value = false
+    const res = await codeFile.loadTree(path)
+    const data = res.data || {}
+    const treeNode = data.tree
+    fileTree.value = treeNode ? [toTreeNode(treeNode)] : []
+    projectRoot.value = data.root || path
     loadDialogVisible.value = false
-    ElMessage.success('文件加载成功')
+    ElMessage.success(`项目已加载: ${data.absolutePath || path}`)
   } catch (error) {
-    ElMessage.error('加载文件失败: ' + (error.response?.data?.message || error.message))
+    ElMessage.error('加载项目失败: ' + (error.response?.data?.error || error.message))
+  } finally {
+    treeLoading.value = false
+  }
+}
+
+const openFile = async (filePath) => {
+  if (!filePath || filePath === '.') return
+  treeLoading.value = true
+  try {
+    const res = await codeFile.read(filePath)
+    const data = res.data || {}
+    codeContent.value = data.content || ''
+    currentFile.value = data.path || filePath
+    isModified.value = false
+    ElMessage.success('文件已打开')
+  } catch (error) {
+    ElMessage.error('打开文件失败: ' + (error.response?.data?.error || error.message))
+  } finally {
+    treeLoading.value = false
   }
 }
 
 const saveFile = async () => {
   if (!currentFile.value) {
-    ElMessage.warning('请先加载文件')
+    ElMessage.warning('请先选择文件')
     return
   }
   
   isSaving.value = true
-  
   try {
-    await api.post('/code/write', {
-      path: currentFile.value,
-      content: codeContent.value,
-      description: '通过前端编辑器保存'
-    })
-    
+    await codeFile.write(currentFile.value, codeContent.value, '通过前端编辑器保存')
     isModified.value = false
     ElMessage.success('文件保存成功')
   } catch (error) {
-    ElMessage.error('保存文件失败: ' + (error.response?.data?.message || error.message))
+    ElMessage.error('保存失败: ' + (error.response?.data?.error || error.message))
   } finally {
     isSaving.value = false
   }
 }
 
 const refreshFiles = () => {
-  ElMessage.info('刷新文件树（演示功能）')
+  if (!projectRoot.value) {
+    ElMessage.warning('请先加载项目')
+    return
+  }
+  loadFilePath.value = projectRoot.value
+  confirmLoadProject()
 }
 
 const handleFileClick = (data) => {
-  if (!data.children) {
-    loadFilePath.value = data.label
-    confirmLoadFile()
+  if (data.type === 'file' && data.path) {
+    openFile(data.path)
   }
 }
 
@@ -219,28 +257,18 @@ const sendToAI = async () => {
   if (!aiInput.value.trim() || aiLoading.value) return
   
   const userMessage = aiInput.value
-  chatMessages.value.push({
-    role: 'user',
-    content: userMessage
-  })
-  
+  chatMessages.value.push({ role: 'user', content: userMessage })
   aiInput.value = ''
   aiLoading.value = true
   
   try {
-    const response = await api.post('/ai/chat', {
-      message: userMessage,
-      codeContext: codeContent.value.substring(0, 1000) // 发送部分代码上下文
-    })
-    
+    const response = await aiChat.chat(userMessage, codeContent.value.substring(0, 8000))
     chatMessages.value.push({
       role: 'assistant',
-      content: response.reply || response.message || '收到回复'
+      content: response.reply || response.message || response.result || '收到回复'
     })
-    
     scrollToBottom()
   } catch (error) {
-    ElMessage.error('AI 请求失败')
     chatMessages.value.push({
       role: 'assistant',
       content: '❌ 请求失败: ' + error.message
@@ -252,7 +280,7 @@ const sendToAI = async () => {
 
 const scrollToBottom = () => {
   setTimeout(() => {
-    const container = document.querySelector('.chat-messages')
+    const container = chatMessagesRef.value || document.querySelector('.chat-messages')
     if (container) {
       container.scrollTop = container.scrollHeight
     }
@@ -311,6 +339,28 @@ const scrollToBottom = () => {
   height: 100%;
   background: rgba(16, 22, 58, 0.4);
   border: 1px solid var(--border-glow);
+  overflow: auto;
+}
+
+.workspace-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+
+.dialog-tip {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+  line-height: 1.6;
+}
+
+.dialog-tip code {
+  color: var(--neon-blue);
+  background: rgba(0, 242, 254, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 :deep(.el-tree) {
@@ -375,6 +425,7 @@ const scrollToBottom = () => {
   line-height: 1.6;
   word-wrap: break-word;
   animation: fadeIn 0.3s ease-out;
+  white-space: pre-wrap;
 }
 
 .chat-msg.user {
@@ -394,7 +445,6 @@ const scrollToBottom = () => {
   padding-top: 16px;
 }
 
-/* 滚动条 */
 :deep(.el-textarea__inner)::-webkit-scrollbar,
 .chat-messages::-webkit-scrollbar {
   width: 6px;
@@ -411,7 +461,6 @@ const scrollToBottom = () => {
   border-radius: 3px;
 }
 
-/* 对话框样式 */
 :deep(.el-dialog) {
   background: var(--card-bg);
   border: 1px solid var(--border-glow);

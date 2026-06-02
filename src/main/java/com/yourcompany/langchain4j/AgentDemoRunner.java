@@ -4,6 +4,7 @@ import com.yourcompany.langchain4j.agent.CustomerSupportAgent;
 import com.yourcompany.langchain4j.agent.OrderManagementAgent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 /**
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
  * 展示如何使用 Agent
  */
 @Component
+@Profile("!production")
 public class AgentDemoRunner implements CommandLineRunner {
 
     @Autowired

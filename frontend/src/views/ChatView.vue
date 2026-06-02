@@ -46,19 +46,24 @@
           :disabled="isLoading"
         />
         <div class="input-actions">
-          <el-button @click="clearChat" :disabled="isLoading">
-            <el-icon><Delete /></el-icon>
-            清空对话
-          </el-button>
-          <el-button 
-            type="primary" 
-            @click="sendMessage" 
-            :loading="isLoading"
-            :disabled="!inputMessage.trim()"
-          >
-            <el-icon><Promotion /></el-icon>
-            发送 (Ctrl+Enter)
-          </el-button>
+          <div class="input-options">
+            <el-switch v-model="streamMode" active-text="流式输出" inactive-text="普通模式" />
+          </div>
+          <div class="input-buttons">
+            <el-button @click="clearChat" :disabled="isLoading">
+              <el-icon><Delete /></el-icon>
+              清空对话
+            </el-button>
+            <el-button 
+              type="primary" 
+              @click="sendMessage" 
+              :loading="isLoading"
+              :disabled="!inputMessage.trim()"
+            >
+              <el-icon><Promotion /></el-icon>
+              发送 (Ctrl+Enter)
+            </el-button>
+          </div>
         </div>
       </div>
     </el-card>
@@ -68,18 +73,18 @@
 <script setup>
 import { ref, nextTick } from 'vue'
 import { User, Cpu, Delete, Promotion } from '@element-plus/icons-vue'
-import api from '../api'
+import { aiChat } from '../api'
 import { ElMessage } from 'element-plus'
 
 const messages = ref([])
 const inputMessage = ref('')
 const isLoading = ref(false)
 const messagesContainer = ref(null)
+const streamMode = ref(true)
 
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || isLoading.value) return
   
-  // 添加用户消息
   messages.value.push({
     role: 'user',
     content: inputMessage.value,
@@ -89,27 +94,73 @@ const sendMessage = async () => {
   const userMessage = inputMessage.value
   inputMessage.value = ''
   isLoading.value = true
-  
   scrollToBottom()
   
+  if (streamMode.value) {
+    await sendMessageSSE(userMessage)
+  } else {
+    await sendMessageSync(userMessage)
+  }
+}
+
+// SSE 流式输出
+const sendMessageSSE = async (message) => {
+  // 添加空 AI 消息占位
+  const aiMsg = {
+    role: 'assistant',
+    content: '',
+    time: new Date().toLocaleTimeString(),
+    isStreaming: true
+  }
+  messages.value.push(aiMsg)
+  
+  const url = aiChat.getStreamUrl(message)
+  const eventSource = new EventSource(url)
+  
+  eventSource.addEventListener('start', (event) => {
+    // AI 开始思考
+  })
+  
+  eventSource.addEventListener('token', (event) => {
+    aiMsg.content += event.data
+    scrollToBottom()
+  })
+  
+  eventSource.addEventListener('done', () => {
+    aiMsg.isStreaming = false
+    isLoading.value = false
+    eventSource.close()
+  })
+  
+  eventSource.addEventListener('error', (event) => {
+    aiMsg.content += '\n❌ 流式输出中断'
+    aiMsg.isStreaming = false
+    isLoading.value = false
+    eventSource.close()
+  })
+  
+  eventSource.onerror = () => {
+    if (aiMsg.content === '') {
+      aiMsg.content = '❌ 连接失败，请检查后端服务'
+    }
+    aiMsg.isStreaming = false
+    isLoading.value = false
+    eventSource.close()
+  }
+}
+
+// 普通同步输出
+const sendMessageSync = async (message) => {
   try {
-    // 调用后端 API
-    const response = await api.post('/ai/chat', {
-      message: userMessage
-    })
-    
-    // 添加 AI 回复
+    const response = await aiChat.chat(message)
     messages.value.push({
       role: 'assistant',
       content: response.reply || response.message || response.content,
       time: new Date().toLocaleTimeString()
     })
-    
     scrollToBottom()
   } catch (error) {
-    ElMessage.error('发送消息失败：' + (error.response?.data?.message || error.message))
-    
-    // 添加错误消息
+    ElMessage.error('发送消息失败')
     messages.value.push({
       role: 'assistant',
       content: '❌ 抱歉，处理您的请求时出现错误。',
@@ -134,7 +185,6 @@ const scrollToBottom = async () => {
 }
 
 const formatMessage = (content) => {
-  // 简单的代码块格式化
   return content
     .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
     .replace(/`([^`]+)`/g, '<code style="background:#f5f5f5;padding:2px 6px;border-radius:3px;">$1</code>')
@@ -271,7 +321,19 @@ const formatMessage = (content) => {
 .input-actions {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-top: 16px;
+}
+
+.input-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.input-buttons {
+  display: flex;
+  gap: 12px;
 }
 
 :deep(.el-button) {

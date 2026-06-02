@@ -22,3 +22,9 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# AI Code Write Tool generated files
+code-operations.log
+code-changes/
+.idea-refresh
+.gitcommit.txt

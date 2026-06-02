@@ -39,18 +39,17 @@ public class SecurityConfig {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authorizeHttpRequests(auth -> auth
-                // 公开接口
+                // 本地功能测试 / Demo：前端页面依赖的 API 均放行（生产环境建议收紧并启用 JWT）
                 .requestMatchers(
                     "/api/auth/**",
-                    "/api/ai/chat",
-                    "/api/ai/health",
-                    "/actuator/prometheus",
-                    "/actuator/health",
+                    "/api/ai/**",
+                    "/api/ai-programming-agent/**",
+                    "/api/project-management/**",
+                    "/api/agent/**",
+                    "/api/code/**",
+                    "/actuator/**",
                     "/h2-console/**"
                 ).permitAll()
-                // 其他接口需要认证
-                .requestMatchers("/api/ai-programming-agent/**").authenticated()
-                // 其他所有请求
                 .anyRequest().permitAll()
             )
             // 添加限流过滤器（最先执行，拒绝恶意请求）

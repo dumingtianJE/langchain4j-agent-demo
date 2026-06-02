@@ -100,7 +100,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Plus, Search, View, Delete } from '@element-plus/icons-vue'
-import api from '../api'
+import api, { knowledge } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const documents = ref([])
@@ -126,11 +126,23 @@ onMounted(() => {
 const loadDocuments = async () => {
   loading.value = true
   try {
-    const response = await api.get('/knowledge/documents')
-    documents.value = response.documents || response.data || []
+    const response = await knowledge.getStats()
+    const stats = response.statistics || {}
+    // 将知识库统计信息展示为文档列表
+    documents.value = stats.documents || []
+    if (!documents.value.length) {
+      documents.value = [
+        {
+          id: 1,
+          title: '知识库已连接',
+          category: 'system',
+          content: `知识库统计: ${stats.totalDocuments || 0} 个文档`,
+          createdAt: new Date().toLocaleString()
+        }
+      ]
+    }
   } catch (error) {
     ElMessage.error('加载文档失败: ' + error.message)
-    // 使用模拟数据
     documents.value = [
       {
         id: 1,
@@ -139,14 +151,6 @@ const loadDocuments = async () => {
         content: '本文档介绍如何使用 Spring Boot 开发 RESTful API...',
         projectPath: 'src/main/java',
         createdAt: '2026-05-25 10:00:00'
-      },
-      {
-        id: 2,
-        title: 'Java 编码规范',
-        category: 'coding-standards',
-        content: '1. 类名使用大驼峰命名\n2. 方法名使用小驼峰命名...',
-        projectPath: '',
-        createdAt: '2026-05-24 15:30:00'
       }
     ]
   } finally {
@@ -162,8 +166,8 @@ const searchDocuments = async () => {
   
   loading.value = true
   try {
-    const response = await api.get(`/knowledge/search?query=${encodeURIComponent(searchQuery.value)}`)
-    documents.value = response.documents || response.data || []
+    const response = await knowledge.search(searchQuery.value, 10)
+    documents.value = response.results || []
   } catch (error) {
     ElMessage.error('搜索失败: ' + error.message)
   } finally {
@@ -190,7 +194,14 @@ const saveDocument = async () => {
   
   saving.value = true
   try {
-    await api.post('/knowledge/documents', form.value)
+    await knowledge.addDocument({
+      title: form.value.title,
+      category: form.value.category,
+      content: form.value.content,
+      projectPath: form.value.projectPath,
+      tags: [],
+      source: 'manual'
+    })
     ElMessage.success('保存成功')
     dialogVisible.value = false
     loadDocuments()
@@ -214,8 +225,7 @@ const deleteDocument = async (doc) => {
       type: 'warning'
     })
     
-    await api.delete(`/knowledge/documents/${doc.id}`)
-    ElMessage.success('删除成功')
+    ElMessage.info('删除功能需要后端提供 DELETE 接口')
     loadDocuments()
   } catch (error) {
     if (error !== 'cancel') {

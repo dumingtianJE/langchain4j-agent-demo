@@ -13,7 +13,7 @@
       
       <!-- 技能列表 -->
       <el-row :gutter="20" v-loading="loading">
-        <el-col :span="8" v-for="skill in skills" :key="skill.id">
+        <el-col :span="8" v-for="skill in skillsList" :key="skill.id">
           <el-card class="skill-card" shadow="hover">
             <div class="skill-header">
               <el-icon :size="40" :color="getSkillColor(skill.level)"><Trophy /></el-icon>
@@ -51,7 +51,7 @@
       </el-row>
       
       <!-- 空状态 -->
-      <el-empty v-if="skills.length === 0 && !loading" description="暂无技能" />
+      <el-empty v-if="skillsList.length === 0 && !loading" description="暂无技能" />
     </el-card>
     
     <!-- 添加/编辑对话框 -->
@@ -94,10 +94,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Plus, Trophy, Edit, Delete } from '@element-plus/icons-vue'
-import api from '../api'
+import api, { skills } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-const skills = ref([])
+const skillsList = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
@@ -119,12 +119,11 @@ onMounted(() => {
 const loadSkills = async () => {
   loading.value = true
   try {
-    const response = await api.get('/skills')
-    skills.value = response.skills || response.data || []
+    const response = await skills.getAll()
+    skillsList.value = response.skills || []
   } catch (error) {
     ElMessage.error('加载技能失败: ' + error.message)
-    // 使用模拟数据
-    skills.value = [
+    skillsList.value = [
       {
         id: 1,
         name: 'Java Spring Boot',
@@ -195,14 +194,14 @@ const saveSkill = async () => {
   
   saving.value = true
   try {
-    if (editingSkill.value) {
-      await api.put(`/skills/${editingSkill.value.id}`, form.value)
-      ElMessage.success('更新成功')
-    } else {
-      await api.post('/skills', form.value)
-      ElMessage.success('添加成功')
-    }
-    
+    await skills.add({
+      name: form.value.name,
+      level: form.value.level,
+      description: form.value.description,
+      keywords: form.value.keywords ? form.value.keywords.split(',').map(k => k.trim()) : [],
+      enabled: form.value.enabled
+    })
+    ElMessage.success('保存成功')
     dialogVisible.value = false
     loadSkills()
   } catch (error) {
@@ -220,8 +219,7 @@ const deleteSkill = async (skill) => {
       type: 'warning'
     })
     
-    await api.delete(`/skills/${skill.id}`)
-    ElMessage.success('删除成功')
+    ElMessage.info('删除功能需要后端提供 DELETE 接口')
     loadSkills()
   } catch (error) {
     if (error !== 'cancel') {

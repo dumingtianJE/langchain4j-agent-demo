@@ -187,6 +187,20 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
+
+        <!-- Google Java Format（代码自动格式化） -->
+        <dependency>
+            <groupId>com.google.googlejavaformat</groupId>
+            <artifactId>google-java-format</artifactId>
+            <version>1.19.2</version>
+        </dependency>
+
+        <!-- Java Diff Utils（Diff 对比） -->
+        <dependency>
+            <groupId>io.github.java-diff-utils</groupId>
+            <artifactId>java-diff-utils</artifactId>
+            <version>4.12</version>
+        </dependency>
     </dependencies>
 
     <build>

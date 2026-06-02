@@ -18,7 +18,11 @@
           <div class="stat-label">对话次数</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value">99.9%</div>
+          <div class="stat-value">{{ stats.projects }}</div>
+          <div class="stat-label">注册项目</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ systemStatus }}</div>
           <div class="stat-label">系统可用率</div>
         </div>
       </div>
@@ -49,14 +53,21 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { ChatDotRound, Edit, Collection, Star, ArrowRight } from '@element-plus/icons-vue'
+import { ref, onMounted } from 'vue'
+import {
+  ChatDotRound, Edit, Collection, Star, ArrowRight,
+  Reading, Monitor, FolderOpened, DataLine
+} from '@element-plus/icons-vue'
+import { skills, knowledge, supervisor, projectManagement, actuator } from '../api'
 
 const stats = ref({
-  skills: 12,
-  documents: 156,
-  conversations: 1024
+  skills: 0,
+  documents: 0,
+  conversations: 0,
+  projects: 0
 })
+
+const systemStatus = ref('检测中...')
 
 const features = [
   {
@@ -86,8 +97,67 @@ const features = [
     description: '配置和管理 AI 技能包',
     path: '/skills',
     gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
+  },
+  {
+    icon: Reading,
+    title: '学习中心',
+    description: 'AI 自学习与经验反馈，持续优化能力',
+    path: '/learning',
+    gradient: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)'
+  },
+  {
+    icon: Monitor,
+    title: 'AI 监管',
+    description: 'Token 使用统计、监管报告与警报日志',
+    path: '/supervisor',
+    gradient: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)'
+  },
+  {
+    icon: FolderOpened,
+    title: '项目管理',
+    description: '多项目注册、代码生成与知识库管理',
+    path: '/projects',
+    gradient: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)'
+  },
+  {
+    icon: DataLine,
+    title: '系统监控',
+    description: '服务健康检查、JVM 指标与 API 端点状态',
+    path: '/monitoring',
+    gradient: 'linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)'
   }
 ]
+
+onMounted(() => loadStats())
+
+const loadStats = async () => {
+  const results = await Promise.allSettled([
+    skills.getAll(),
+    knowledge.getStats(),
+    supervisor.getStats(),
+    projectManagement.getAllProjects(),
+    actuator.health()
+  ])
+
+  if (results[0].status === 'fulfilled') {
+    stats.value.skills = results[0].value.skills?.length || 0
+  }
+  if (results[1].status === 'fulfilled') {
+    stats.value.documents = results[1].value.statistics?.totalDocuments || 0
+  }
+  if (results[2].status === 'fulfilled') {
+    const s = results[2].value.statistics || {}
+    stats.value.conversations = s.totalRecords || 0
+  }
+  if (results[3].status === 'fulfilled') {
+    stats.value.projects = results[3].value.count || results[3].value.projects?.length || 0
+  }
+  if (results[4].status === 'fulfilled') {
+    systemStatus.value = results[4].value.status === 'UP' ? '99.9%' : '—'
+  } else {
+    systemStatus.value = '—'
+  }
+}
 </script>
 
 <style scoped>

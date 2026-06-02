@@ -12,6 +12,11 @@ const routes = [
     component: () => import('../views/ChatView.vue')
   },
   {
+    path: '/code-editor',
+    name: 'CodeEditor',
+    component: () => import('../views/CodeEditorView.vue')
+  },
+  {
     path: '/knowledge',
     name: 'Knowledge',
     component: () => import('../views/KnowledgeView.vue')
@@ -22,9 +27,24 @@ const routes = [
     component: () => import('../views/SkillsView.vue')
   },
   {
-    path: '/code-editor',
-    name: 'CodeEditor',
-    component: () => import('../views/CodeEditorView.vue')
+    path: '/learning',
+    name: 'Learning',
+    component: () => import('../views/LearningView.vue')
+  },
+  {
+    path: '/supervisor',
+    name: 'Supervisor',
+    component: () => import('../views/SupervisorView.vue')
+  },
+  {
+    path: '/projects',
+    name: 'Projects',
+    component: () => import('../views/ProjectsView.vue')
+  },
+  {
+    path: '/monitoring',
+    name: 'Monitoring',
+    component: () => import('../views/MonitoringView.vue')
   }
 ]
 

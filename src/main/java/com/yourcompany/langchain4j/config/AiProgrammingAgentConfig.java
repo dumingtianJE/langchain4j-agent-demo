@@ -37,16 +37,6 @@ public class AiProgrammingAgentConfig {
     private final AiSupervisor aiSupervisor;
     
     /**
-     * 配置 Chat Memory（对话记忆）
-     * 使用消息窗口记忆，保留最近的消息
-     */
-    @Bean
-    public ChatMemory chatMemory() {
-        log.info("初始化 Chat Memory (最多 50 条消息)");
-        return MessageWindowChatMemory.withMaxMessages(50);
-    }
-    
-    /**
      * 配置 AI 编程 Agent
      * 集成所有工具和能力
      */

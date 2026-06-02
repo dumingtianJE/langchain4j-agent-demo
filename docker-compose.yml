@@ -23,16 +23,22 @@ services:
       - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=20
       - SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=5
       
-      # Redis 配置
-      - SPRING_REDIS_HOST=redis
-      - SPRING_REDIS_PORT=6379
-      - SPRING_REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
-      - SPRING_REDIS_TIMEOUT=5000
+      # Redis 配置（对应 application.yml 中的 REDIS_* 变量）
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
       
-      # Milvus 向量数据库配置
-      - AI_EMBEDDING_TYPE=milvus
-      - AI_MILVUS_HOST=milvus
-      - AI_MILVUS_PORT=19530
+      # Milvus 向量数据库配置（本地测试可在 .env 中设 MILVUS_ENABLED=false）
+      - MILVUS_ENABLED=${MILVUS_ENABLED:-false}
+      - MILVUS_HOST=milvus
+      - MILVUS_PORT=19530
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      
+      # LangChain4j HTTP 客户端与流式模型
+      - LANGCHAIN4J_OPEN_AI_STREAMING_CHAT_MODEL_API_KEY=${DASHSCOPE_API_KEY}
+      - LANGCHAIN4J_OPEN_AI_STREAMING_CHAT_MODEL_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+      - LANGCHAIN4J_OPEN_AI_STREAMING_CHAT_MODEL_MODEL_NAME=qwen-max
+      - JAVA_OPTS=-Dlangchain4j.http.clientBuilderFactory=dev.langchain4j.http.client.jdk.JdkHttpClientBuilderFactory -Xms512m -Xmx1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom
       
       # JWT 配置
       - JWT_SECRET=${JWT_SECRET:-mySecretKeyForJWTTokenGenerationAndValidation123456789}
@@ -47,14 +53,16 @@ services:
       - LOGGING_LEVEL_COM_YOURCOMPANY=INFO
       - LOGGING_LEVEL_DEV_LANGCHAIN4J=INFO
       - LOGGING_FILE_NAME=/app/logs/application.log
+      
+      # 代码编辑器工作区（挂载当前项目到容器）
+      - CODE_WORKSPACE_ROOT=/app/workspace
     depends_on:
       redis:
-        condition: service_healthy
-      milvus:
         condition: service_healthy
     volumes:
       - app-data:/app/data
       - app-logs:/app/logs
+      - .:/app/workspace:rw
     networks:
       - app-network
     restart: unless-stopped
@@ -99,6 +107,8 @@ services:
   milvus:
     image: milvusdb/milvus:v2.3.0
     container_name: milvus-vector-db
+    security_opt:
+      - seccomp:unconfined
     ports:
       - "19530:19530"  # gRPC 端口
       - "9091:9091"    # HTTP 端口
@@ -107,15 +117,16 @@ services:
     environment:
       - ETCD_USE_EMBED=true
       - ETCD_DATA_DIR=/var/lib/milvus/etcd
+      - COMMON_STORAGETYPE=local
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
     command: ["milvus", "run", "standalone"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
     networks:
       - app-network
     restart: unless-stopped
@@ -147,10 +158,10 @@ services:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/datasources:ro
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}

@@ -28,6 +28,7 @@ import io.milvus.response.SearchResultsWrapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -40,6 +41,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "ai.milvus.enabled", havingValue = "true")
 public class MilvusEmbeddingStore implements EmbeddingStore<TextSegment> {
 
     private final MilvusServiceClient milvusClient;
