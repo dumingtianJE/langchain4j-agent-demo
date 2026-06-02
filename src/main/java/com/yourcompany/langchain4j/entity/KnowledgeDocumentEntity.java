@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 知识文档数据库实体
@@ -31,7 +32,7 @@ public class KnowledgeDocumentEntity {
     private String category;
     
     @ElementCollection
-    private String[] tags;
+    private List<String> tags;
     
     private String source;
     

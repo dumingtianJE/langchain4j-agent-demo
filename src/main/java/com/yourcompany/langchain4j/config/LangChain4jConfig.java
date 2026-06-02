@@ -15,11 +15,12 @@ public class LangChain4jConfig {
     /**
      * 配置聊天记忆提供者
      * 使用 MessageWindowChatMemory 基于消息数量管理记忆窗口
+     * 每个会话（chatId）维护独立的记忆，最多保留 30 条消息
      * 
      * @return ChatMemoryProvider
      */
     @Bean
     ChatMemoryProvider chatMemoryProvider() {
-        return chatId -> MessageWindowChatMemory.withMaxMessages(10);
+        return chatId -> MessageWindowChatMemory.withMaxMessages(30);
     }
 }

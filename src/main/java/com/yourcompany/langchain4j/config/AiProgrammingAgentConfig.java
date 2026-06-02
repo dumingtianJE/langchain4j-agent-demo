@@ -6,6 +6,8 @@ import com.yourcompany.langchain4j.tool.CodeAnalysisTool;
 import com.yourcompany.langchain4j.tool.CodeFileTool;
 import com.yourcompany.langchain4j.tool.KnowledgeBaseTool;
 import com.yourcompany.langchain4j.tool.CodeQualityTool;
+import com.yourcompany.langchain4j.tool.CodeWriteTool;
+import com.yourcompany.langchain4j.tool.GitIntegrationTool;
 import com.yourcompany.langchain4j.tool.ProjectContextTool;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
@@ -29,6 +31,8 @@ public class AiProgrammingAgentConfig {
     private final CodeAnalysisTool codeAnalysisTool;
     private final KnowledgeBaseTool knowledgeBaseTool;
     private final CodeQualityTool codeQualityTool;
+    private final CodeWriteTool codeWriteTool;
+    private final GitIntegrationTool gitIntegrationTool;
     private final ProjectContextTool projectContextTool;
     private final AiSupervisor aiSupervisor;
     
@@ -38,8 +42,8 @@ public class AiProgrammingAgentConfig {
      */
     @Bean
     public ChatMemory chatMemory() {
-        log.info("初始化 Chat Memory (最多 20 条消息)");
-        return MessageWindowChatMemory.withMaxMessages(20);
+        log.info("初始化 Chat Memory (最多 50 条消息)");
+        return MessageWindowChatMemory.withMaxMessages(50);
     }
     
     /**
@@ -54,7 +58,7 @@ public class AiProgrammingAgentConfig {
             .chatModel(chatModel)
             .chatMemory(chatMemory)
             .tools(codeFileTool, codeAnalysisTool, knowledgeBaseTool, 
-                   codeQualityTool, projectContextTool)
+                   codeQualityTool, codeWriteTool, gitIntegrationTool, projectContextTool)
             .build();
     }
 }

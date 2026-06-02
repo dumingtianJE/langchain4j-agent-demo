@@ -1,7 +1,9 @@
 package com.yourcompany.langchain4j.learning;
 
+import com.yourcompany.langchain4j.entity.LearningExperienceEntity;
 import com.yourcompany.langchain4j.knowledge.KnowledgeBaseManager;
 import com.yourcompany.langchain4j.knowledge.KnowledgeDocument;
+import com.yourcompany.langchain4j.repository.LearningExperienceRepository;
 import com.yourcompany.langchain4j.skill.SkillManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
 /**
  * 自主学习管理器
  * Agent 通过用户反馈持续改进和优化
+ * 支持 JPA 持久化，重启后不会丢失学习成果
  */
 @Slf4j
 @Service
@@ -22,26 +25,39 @@ public class SelfLearningManager {
     
     private final KnowledgeBaseManager knowledgeBaseManager;
     private final SkillManager skillManager;
+    private final LearningExperienceRepository learningExperienceRepository;
     
-    // 学习经验存储
+    // 内存缓存，加速查询
     private final Map<String, LearningExperience> experienceStore = new ConcurrentHashMap<>();
     
     // 改进模式库（从经验中提取的改进模式）
     private final List<String> improvementPatterns = Collections.synchronizedList(new ArrayList<>());
     
     public SelfLearningManager(KnowledgeBaseManager knowledgeBaseManager, 
-                               SkillManager skillManager) {
+                               SkillManager skillManager,
+                               LearningExperienceRepository learningExperienceRepository) {
         this.knowledgeBaseManager = knowledgeBaseManager;
         this.skillManager = skillManager;
+        this.learningExperienceRepository = learningExperienceRepository;
     }
     
     @PostConstruct
     public void initializeLearningSystem() {
-        log.info("自主学习系统初始化完成");
+        // 从数据库加载历史学习经验到内存缓存
+        try {
+            List<LearningExperienceEntity> entities = learningExperienceRepository.findAll();
+            for (LearningExperienceEntity entity : entities) {
+                experienceStore.put(entity.getId(), toDomain(entity));
+            }
+            log.info("自主学习系统初始化完成，已从数据库加载 {} 条历史经验", entities.size());
+        } catch (Exception e) {
+            log.warn("从数据库加载学习经验失败，将以空缓存启动: {}", e.getMessage());
+            log.info("自主学习系统初始化完成（内存模式）");
+        }
     }
     
     /**
-     * 记录交互经验
+     * 记录交互经验并持久化到数据库
      */
     public String recordExperience(LearningExperience experience) {
         if (experience.getId() == null) {
@@ -51,6 +67,10 @@ public class SelfLearningManager {
         experience.setIsReviewed(false);
         
         experienceStore.put(experience.getId(), experience);
+        
+        // 持久化到数据库
+        persistToDatabase(experience);
+        
         log.info("已记录学习经验: {} - 反馈分数: {}", 
             experience.getId(), experience.getFeedbackScore());
         
@@ -65,6 +85,19 @@ public class SelfLearningManager {
         }
         
         return experience.getId();
+    }
+    
+    /**
+     * 将经验持久化到数据库
+     */
+    private void persistToDatabase(LearningExperience experience) {
+        try {
+            LearningExperienceEntity entity = toEntity(experience);
+            learningExperienceRepository.save(entity);
+            log.debug("学习经验已持久化到数据库: {}", experience.getId());
+        } catch (Exception e) {
+            log.warn("学习经验持久化失败（内存缓存已保存）: {}", e.getMessage());
+        }
     }
     
     /**
@@ -230,5 +263,49 @@ public class SelfLearningManager {
         report.put("generatedAt", LocalDateTime.now());
         
         return report;
+    }
+    
+    // ==================== 对象转换工具 ====================
+    
+    /**
+     * LearningExperienceEntity -> LearningExperience
+     */
+    private LearningExperience toDomain(LearningExperienceEntity entity) {
+        LearningExperience domain = new LearningExperience();
+        domain.setId(entity.getId());
+        domain.setQuery(entity.getQuery());
+        domain.setResponse(entity.getResponse());
+        domain.setUserFeedback(entity.getUserFeedback());
+        domain.setFeedbackScore(entity.getFeedbackScore());
+        domain.setUsedSkills(entity.getUsedSkills());
+        domain.setRetrievedKnowledge(entity.getRetrievedKnowledge());
+        domain.setUsedTools(entity.getUsedTools());
+        domain.setTokensUsed(entity.getTokensUsed());
+        domain.setLearnedImprovement(entity.getLearnedImprovement());
+        domain.setCategory(entity.getCategory());
+        domain.setCreatedAt(entity.getCreatedAt());
+        domain.setIsReviewed(entity.getIsReviewed());
+        return domain;
+    }
+    
+    /**
+     * LearningExperience -> LearningExperienceEntity
+     */
+    private LearningExperienceEntity toEntity(LearningExperience domain) {
+        LearningExperienceEntity entity = new LearningExperienceEntity();
+        entity.setId(domain.getId());
+        entity.setQuery(domain.getQuery());
+        entity.setResponse(domain.getResponse());
+        entity.setUserFeedback(domain.getUserFeedback());
+        entity.setFeedbackScore(domain.getFeedbackScore());
+        entity.setUsedSkills(domain.getUsedSkills());
+        entity.setRetrievedKnowledge(domain.getRetrievedKnowledge());
+        entity.setUsedTools(domain.getUsedTools());
+        entity.setTokensUsed(domain.getTokensUsed());
+        entity.setLearnedImprovement(domain.getLearnedImprovement());
+        entity.setCategory(domain.getCategory());
+        entity.setCreatedAt(domain.getCreatedAt());
+        entity.setIsReviewed(domain.getIsReviewed());
+        return entity;
     }
 }

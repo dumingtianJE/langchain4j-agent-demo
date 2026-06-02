@@ -62,7 +62,8 @@ langchain4j:
       base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       model-name: ${DASHSCOPE_MODEL:qwen-max}
       temperature: 0.7
-      timeout: PT60S
+      timeout: PT120S
+      max-retries: 3
       log-requests: ${LOG_REQUESTS:false}
       log-responses: ${LOG_RESPONSES:false}
 
@@ -81,14 +82,15 @@ ai:
     filesystem-path: /app/data/embeddings
     auto-save-interval: 300
   
-  # Milvus 向量数据库配置（生产环境）
+  # Milvus 向量数据库配置（已启用，生产环境使用）
   milvus:
+    enabled: ${MILVUS_ENABLED:true}
     host: ${MILVUS_HOST:localhost}
     port: ${MILVUS_PORT:19530}
     collection-name: ai_knowledge_embeddings
     dimension: 1024
     index-type: HNSW
-    metric-type: COSINE
+    metric-type: IP
     hnsw-m: 16
     hnsw-ef-construction: 200
     hnsw-ef: 64
@@ -97,9 +99,15 @@ ai:
   
   # API 限流配置（生产环境）
   ratelimit:
-    enabled: true
-    requests-per-minute: 100
-    burst-capacity: 150
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    requests-per-minute: ${RATE_LIMIT_RPM:100}
+    burst-capacity: ${RATE_LIMIT_BURST:150}
+
+  # 对话记忆配置
+  chat:
+    memory:
+      max-messages: ${CHAT_MEMORY_MAX_MESSAGES:50}
+      provider-max-messages: ${CHAT_MEMORY_PROVIDER_MAX_MESSAGES:30}
 
 # JWT 配置
 jwt:
