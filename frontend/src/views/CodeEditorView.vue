@@ -71,7 +71,18 @@
         <el-col :span="5">
           <el-card class="ai-chat-card">
             <template #header>
-              <span>AI 助手</span>
+              <div class="chat-header">
+                <span>AI 助手</span>
+                <el-button 
+                  v-if="chatMessages.length > 0"
+                  text 
+                  size="small" 
+                  @click="clearChat"
+                  title="清除对话记录"
+                >
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </div>
             </template>
             <!-- 快捷操作按钮 -->
             <div class="quick-actions">
@@ -162,10 +173,48 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { FolderOpened, Download, MagicStick, Refresh, WarningFilled } from '@element-plus/icons-vue'
+import { FolderOpened, Download, MagicStick, Refresh, WarningFilled, Delete } from '@element-plus/icons-vue'
 import { codeFile, aiChat } from '../api'
 import { ElMessage } from 'element-plus'
 
+// ==================== 会话持久化（localStorage） ====================
+const SK = 'code-editor:'
+const saveLS = (key, val) => { try { localStorage.setItem(SK + key, typeof val === 'string' ? val : JSON.stringify(val)) } catch {} }
+const loadLS = (key) => { try { const v = localStorage.getItem(SK + key); return v ? (v.startsWith('[') || v.startsWith('{') ? JSON.parse(v) : v) : null } catch { return null } }
+const removeLS = (key) => { try { localStorage.removeItem(SK + key) } catch {} }
+
+/** 保存当前会话状态 */
+const saveSession = () => {
+  saveLS('project-root', projectRoot.value)
+  saveLS('load-mode', loadMode.value)
+  saveLS('current-file', currentFile.value)
+}
+
+/** 保存 AI 聊天记录（最多保留最近 50 条） */
+const saveChatHistory = () => {
+  const msgs = chatMessages.value.slice(-50)
+  saveLS('chat-messages', msgs)
+}
+
+/** 防抖保存编辑区草稿内容 */
+let draftTimer = null
+const saveDraft = () => {
+  clearTimeout(draftTimer)
+  draftTimer = setTimeout(() => {
+    if (codeContent.value && currentFile.value) {
+      saveLS('draft-file', currentFile.value)
+      saveLS('draft-content', codeContent.value)
+    }
+  }, 1000)
+}
+
+/** 清除草稿 */
+const clearDraft = () => {
+  removeLS('draft-file')
+  removeLS('draft-content')
+}
+
+// ==================== 状态变量 ====================
 const codeContent = ref('')
 const currentFile = ref('')
 const isModified = ref(false)
@@ -173,8 +222,8 @@ const isSaving = ref(false)
 const loadDialogVisible = ref(false)
 const loadFilePath = ref('.')
 const loadMode = ref('local')
-const isDockerEnv = ref(false)   // 后端是否运行在 Docker/Linux 容器中
-const pathHint = ref('')          // 路径输入提示信息
+const isDockerEnv = ref(false)
+const pathHint = ref('')
 const aiInput = ref('')
 const aiLoading = ref(false)
 const chatMessages = ref([])
@@ -190,11 +239,11 @@ const treeProps = {
   label: 'name'
 }
 
+// ==================== 初始化：恢复会话 ====================
 onMounted(async () => {
   try {
     const res = await codeFile.getWorkspace()
     workspaceRoot.value = res.workspaceRoot || ''
-    // 根据工作区路径判断后端是否运行在 Docker/Linux 容器中
     isDockerEnv.value = workspaceRoot.value.startsWith('/') && workspaceRoot.value.includes('/app')
     if (isDockerEnv.value) {
       loadMode.value = 'docker'
@@ -205,6 +254,62 @@ onMounted(async () => {
     }
   } catch {
     loadFilePath.value = '.'
+  }
+
+  // 恢复上次的项目路径
+  const savedRoot = loadLS('project-root')
+  const savedMode = loadLS('load-mode')
+  if (savedRoot) {
+    loadMode.value = savedMode || loadMode.value
+    loadFilePath.value = savedRoot
+    // 自动加载项目文件树
+    try {
+      const res = await codeFile.loadTree(savedRoot)
+      const data = res.data || {}
+      const treeNode = data.tree
+      fileTree.value = treeNode ? [toTreeNode(treeNode)] : []
+      projectRoot.value = data.projectRoot || data.root || savedRoot
+      workspaceRoot.value = data.projectRoot || data.absolutePath || savedRoot
+    } catch {
+      // 项目路径可能已失效，忽略
+    }
+  }
+
+  // 恢复上次打开的文件
+  const savedFile = loadLS('current-file')
+  if (savedFile) {
+    try {
+      const res = await codeFile.read(savedFile)
+      const data = res.data || {}
+      codeContent.value = data.content || ''
+      currentFile.value = data.path || savedFile
+      isModified.value = false
+    } catch {
+      // 文件可能已不存在，尝试恢复草稿
+      const draftFile = loadLS('draft-file')
+      const draftContent = loadLS('draft-content')
+      if (draftFile && draftContent) {
+        currentFile.value = draftFile
+        codeContent.value = draftContent
+        isModified.value = true
+      }
+    }
+  } else {
+    // 没有保存的文件，但有草稿
+    const draftFile = loadLS('draft-file')
+    const draftContent = loadLS('draft-content')
+    if (draftFile && draftContent) {
+      currentFile.value = draftFile
+      codeContent.value = draftContent
+      isModified.value = true
+    }
+  }
+
+  // 恢复 AI 聊天记录
+  const savedChat = loadLS('chat-messages')
+  if (savedChat && Array.isArray(savedChat)) {
+    chatMessages.value = savedChat
+    scrollToBottom()
   }
 })
 
@@ -242,6 +347,7 @@ const onPathInput = (val) => {
 
 const markModified = () => {
   isModified.value = true
+  saveDraft()  // 自动保存草稿
 }
 
 const toTreeNode = (node) => {
@@ -282,6 +388,7 @@ const confirmLoadProject = async () => {
     projectRoot.value = data.projectRoot || data.root || path
     workspaceRoot.value = data.projectRoot || data.absolutePath || path
     loadDialogVisible.value = false
+    saveSession()  // 持久化项目路径
     ElMessage.success(`项目已加载: ${data.absolutePath || path}`)
   } catch (error) {
     ElMessage.error('加载项目失败: ' + (error.response?.data?.error || error.message))
@@ -299,6 +406,8 @@ const openFile = async (filePath) => {
     codeContent.value = data.content || ''
     currentFile.value = data.path || filePath
     isModified.value = false
+    clearDraft()   // 打开新文件时清除旧草稿
+    saveSession()  // 持久化当前文件路径
     ElMessage.success('文件已打开')
   } catch (error) {
     ElMessage.error('打开文件失败: ' + (error.response?.data?.error || error.message))
@@ -317,6 +426,7 @@ const saveFile = async () => {
   try {
     await codeFile.write(currentFile.value, codeContent.value, '通过前端编辑器保存')
     isModified.value = false
+    clearDraft()  // 保存成功后清除草稿
     ElMessage.success('文件保存成功')
   } catch (error) {
     ElMessage.error('保存失败: ' + (error.response?.data?.error || error.message))
@@ -349,6 +459,7 @@ const sendToAI = async () => {
   
   const userMessage = aiInput.value
   chatMessages.value.push({ role: 'user', content: userMessage })
+  saveChatHistory()  // 保存用户消息
   aiInput.value = ''
   aiLoading.value = true
   
@@ -360,6 +471,7 @@ const sendToAI = async () => {
       role: 'assistant',
       content: response.reply || response.message || response.result || '收到回复'
     })
+    saveChatHistory()  // 保存 AI 回复
     scrollToBottom()
   } catch (error) {
     let errMsg = '❌ 请求失败'
@@ -384,6 +496,7 @@ const sendToAI = async () => {
       role: 'assistant',
       content: errMsg
     })
+    saveChatHistory()
     scrollToBottom()
   } finally {
     aiLoading.value = false
@@ -411,6 +524,13 @@ const scrollToBottom = () => {
       container.scrollTop = container.scrollHeight
     }
   }, 100)
+}
+
+/** 清除 AI 对话记录 */
+const clearChat = () => {
+  chatMessages.value = []
+  removeLS('chat-messages')
+  ElMessage.success('对话记录已清除')
 }
 </script>
 
@@ -530,6 +650,12 @@ const scrollToBottom = () => {
   align-items: center;
   font-weight: 600;
   color: var(--neon-blue);
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .editor-info {

@@ -454,6 +454,13 @@ public class KnowledgeBaseManager {
     }
     
     /**
+     * 获取所有文档列表
+     */
+    public List<KnowledgeDocument> getAllDocuments() {
+        return new ArrayList<>(documentRegistry.values());
+    }
+    
+    /**
      * 根据 ID 获取文档
      */
     public Optional<KnowledgeDocument> getDocumentById(String id) {

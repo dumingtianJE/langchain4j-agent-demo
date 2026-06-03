@@ -13,6 +13,8 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -181,6 +183,69 @@ public class AiProgrammingAgentController {
             "success", true,
             "statistics", knowledgeBaseManager.getKnowledgeBaseStats()
         ));
+    }
+    
+    /**
+     * 知识库 - 获取所有文档列表
+     */
+    @GetMapping("/knowledge/documents")
+    public ResponseEntity<Map<String, Object>> listDocuments() {
+        List<KnowledgeDocument> docs = knowledgeBaseManager.getAllDocuments();
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "documents", docs,
+            "total", docs.size()
+        ));
+    }
+    
+    /**
+     * 知识库 - 获取文档详情
+     */
+    @GetMapping("/knowledge/documents/{id}")
+    public ResponseEntity<Map<String, Object>> getDocument(@PathVariable String id) {
+        return knowledgeBaseManager.getDocumentById(id)
+            .map(doc -> ResponseEntity.ok(Map.of(
+                "success", true,
+                "document", doc
+            )))
+            .orElse(ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", "文档不存在: " + id
+            )));
+    }
+    
+    /**
+     * 知识库 - 删除文档
+     */
+    @DeleteMapping("/knowledge/documents/{id}")
+    public ResponseEntity<Map<String, Object>> deleteDocument(@PathVariable String id) {
+        log.info("删除知识文档: {}", id);
+        boolean deleted = knowledgeBaseManager.deleteDocument(id);
+        if (deleted) {
+            return ResponseEntity.ok(Map.of("success", true, "message", "文档已删除"));
+        }
+        return ResponseEntity.badRequest().body(Map.of(
+            "success", false, "error", "文档不存在或无法删除: " + id
+        ));
+    }
+    
+    /**
+     * 知识库 - 下载文档内容
+     */
+    @GetMapping("/knowledge/documents/{id}/download")
+    public ResponseEntity<byte[]> downloadDocument(@PathVariable String id) {
+        return knowledgeBaseManager.getDocumentById(id)
+            .map(doc -> {
+                String content = doc.getContent();
+                String filename = (doc.getTitle() != null ? doc.getTitle() : doc.getId()) + ".md";
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.TEXT_PLAIN);
+                headers.setContentDispositionFormData("attachment", 
+                    java.net.URLEncoder.encode(filename, java.nio.charset.StandardCharsets.UTF_8));
+                return new ResponseEntity<>(content.getBytes(java.nio.charset.StandardCharsets.UTF_8), 
+                    headers, org.springframework.http.HttpStatus.OK);
+            })
+            .orElse(ResponseEntity.notFound().build());
     }
     
     /**

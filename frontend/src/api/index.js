@@ -101,9 +101,25 @@ export const aiProgramming = {
 
 // ==================== 知识库 (/api/ai-programming-agent/knowledge) ====================
 export const knowledge = {
+  // 获取所有文档列表
+  listDocuments: () =>
+    api.get('/ai-programming-agent/knowledge/documents'),
+
+  // 获取文档详情
+  getDocument: (id) =>
+    api.get(`/ai-programming-agent/knowledge/documents/${id}`),
+
   // 添加文档
   addDocument: (document) =>
     api.post('/ai-programming-agent/knowledge/add', document),
+
+  // 删除文档
+  deleteDocument: (id) =>
+    api.delete(`/ai-programming-agent/knowledge/documents/${id}`),
+
+  // 下载文档内容（返回文件下载 URL）
+  getDownloadUrl: (id) =>
+    `/api/ai-programming-agent/knowledge/documents/${id}/download`,
 
   // 检索文档
   search: (query, maxResults = 5) =>
