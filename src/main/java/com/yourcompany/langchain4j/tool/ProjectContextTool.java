@@ -23,9 +23,13 @@ public class ProjectContextTool {
     @Tool("分析项目结构：识别项目类型、技术栈、构建工具等")
     public String analyzeProjectStructure(String projectPath) {
         try {
+            log.info("开始分析项目结构，路径: {}", projectPath);
+            
             Path path = Paths.get(projectPath);
             if (!Files.exists(path)) {
-                return "错误：项目路径不存在";
+                log.warn("项目路径不存在: {}", projectPath);
+                return "错误：项目路径不存在 - " + projectPath + 
+                       "\n\n提示：请检查路径是否正确。在 Docker 环境中，请使用容器内的绝对路径，例如 /app/workspace/langchain4j-agent-demo 或 .（当前工作目录）";
             }
             
             Map<String, Object> projectInfo = new LinkedHashMap<>();

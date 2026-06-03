@@ -65,9 +65,9 @@ api.interceptors.response.use(
 
 // ==================== AI 对话 (AiChatController /api/ai) ====================
 export const aiChat = {
-  // 同步对话（AI 回复较慢，单独设置 120s 超时）
+  // 同步对话（AI 回复较慢，设置 300s 超时以支持复杂任务）
   chat: (message, codeContext) =>
-    api.post('/ai/chat', { message, codeContext: codeContext || null }, { timeout: 120000 }),
+    api.post('/ai/chat', { message, codeContext: codeContext || null }, { timeout: 300000 }),
 
   // SSE 流式对话（返回 EventSource URL）
   getStreamUrl: (message, codeContext) => {

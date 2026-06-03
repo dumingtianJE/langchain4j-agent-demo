@@ -77,9 +77,27 @@ public class AiChatController {
             
         } catch (Exception e) {
             log.error("AI 对话处理失败", e);
+            
+            String errorMessage = e.getMessage();
+            String reply;
+            
+            // 检测工具调用序列错误
+            if (errorMessage != null && errorMessage.contains("tool_calls")) {
+                log.warn("检测到工具调用序列错误，可能是对话历史不一致导致");
+                reply = "❗ 对话上下文异常，请清除对话历史后重试。\n\n" +
+                        "建议操作：\n" +
+                        "1. 点击右侧 AI 助手面板右上角的垃圾桶图标清除对话\n" +
+                        "2. 或刷新页面后重新发送消息";
+            } else if (errorMessage != null && errorMessage.contains("400")) {
+                // 其他 400 错误（如 API 参数错误）
+                reply = "❗ API 请求参数错误：" + errorMessage;
+            } else {
+                reply = "❗ 抱歉，处理您的请求时出现错误：" + errorMessage;
+            }
+            
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,
-                "reply", "❗ 抱歉，处理您的请求时出现错误：" + e.getMessage(),
+                "reply", reply,
                 "timestamp", System.currentTimeMillis()
             ));
         }
@@ -98,8 +116,8 @@ public class AiChatController {
                                   @RequestParam(required = false) String codeContext) {
         log.info("收到 SSE 流式对话请求: {}", message);
         
-        // 超时设置 3 分钟，防止复杂任务超时
-        SseEmitter emitter = new SseEmitter(180_000L);
+        // 超时设置 5 分钟，支持复杂任务
+        SseEmitter emitter = new SseEmitter(300_000L);
         
         sseExecutor.execute(() -> {
             try {

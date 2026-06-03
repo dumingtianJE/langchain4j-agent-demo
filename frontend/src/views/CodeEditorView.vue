@@ -457,7 +457,24 @@ const askAI = () => {
 const sendToAI = async () => {
   if (!aiInput.value.trim() || aiLoading.value) return
   
-  const userMessage = aiInput.value
+  let userMessage = aiInput.value
+  
+  // 如果已加载项目，自动附加项目路径信息供AI使用
+  if (projectRoot.value) {
+    const pathInfo = `\n\n【当前项目路径】: ${projectRoot.value}`
+    // 对于解析项目类的请求，附加路径信息
+    if (userMessage.includes('解析项目') || userMessage.includes('分析项目') || 
+        userMessage.includes('业务逻辑') || userMessage.includes('业务架构')) {
+      userMessage += pathInfo
+    }
+  }
+  
+  // 检测是否为复杂问题，如果是则使用分步处理
+  if (isComplexQuestion(userMessage)) {
+    await handleComplexQuestion(userMessage)
+    return
+  }
+  
   chatMessages.value.push({ role: 'user', content: userMessage })
   saveChatHistory()  // 保存用户消息
   aiInput.value = ''
@@ -485,6 +502,16 @@ const sendToAI = async () => {
       } else {
         errMsg = `❌ 请求失败 (${error.response.status})`
       }
+        
+      // 如果是工具调用序列错误，自动清除对话历史
+      if (error.response.status === 400 && (errMsg.includes('tool_calls') || errMsg.includes('工具调用') || errMsg.includes('对话上下文异常'))) {
+        ElMessage.warning('检测到对话历史异常，已自动清除。请重新发送消息。')
+        chatMessages.value = []
+        removeLS('chat-messages')
+        scrollToBottom()
+        aiLoading.value = false
+        return
+      }
     } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
       errMsg = '❌ AI 响应超时，请稍后重试或缩短问题内容'
     } else if (error.request) {
@@ -503,18 +530,349 @@ const sendToAI = async () => {
   }
 }
 
+/** 检测是否为复杂问题 */
+const isComplexQuestion = (message) => {
+  // 1. 用户明确列出了多个要求（编号列表、多个问句）
+  const hasNumberedList = /\n\s*\d+[.、）)]/.test(message) || /^\s*\d+[.、）)]/m.test(message)
+  const hasMultipleQuestions = (message.match(/？/g) || []).length >= 2
+  const hasMultipleItems = (message.match(/[；;]/g) || []).length >= 2
+  
+  // 2. 包含"全面/详细/深度"等复合分析词 + 分析动词
+  const hasDeepAnalysis = 
+    /全面|详细|深度|完整|综合|系统性/.test(message) &&
+    /分析|评估|总结|梳理|解析|审查|规划|设计/.test(message)
+  
+  // 3. 涉及多个维度（逗号/顿号分隔的并列项 >= 3 个）
+  const hasMultipleAspects = (() => {
+    // 匹配 "包括：A、B、C" 或 "A，B，C" 这类结构
+    const items = message.match(/[、，,]/g)
+    return items && items.length >= 3
+  })()
+  
+  // 4. 预定义的复杂关键词（覆盖常见场景）
+  const complexKeywords = [
+    '全面分析', '详细分析', '深度分析', '完整分析',
+    '全面评估', '详细评估', '深度评估',
+    '全面总结', '详细总结', '全面梳理',
+    '综合分析', '系统性分析',
+    '项目架构', '系统架构', '软件架构',
+    '业务流程', '业务逻辑',
+    '技术栈', '技术选型',
+    '设计模式', '设计原则',
+    '性能优化', '性能分析',
+    '安全分析', '安全评估',
+    '代码质量', '代码审查',
+    '重构方案', '优化方案',
+    '微服务设计', '迁移方案', '技术方案',
+    '对比分析', '技术对比', '方案对比'
+  ]
+  const hasComplexKeyword = complexKeywords.some(kw => message.includes(kw))
+  
+  return hasNumberedList || hasMultipleQuestions || hasMultipleItems || 
+         hasDeepAnalysis || hasMultipleAspects || hasComplexKeyword
+}
+
+/** 智能切分复杂问题 — 先让 AI 规划，再逐步执行 */
+const splitComplexQuestion = async (message) => {
+  // 第一步：尝试让 AI 智能规划子任务
+  try {
+    const planPrompt = `你是一个任务规划专家。请将以下复杂问题拆分为 2~4 个独立的子任务，每个子任务用一句话描述要做什么。
+
+要求：
+1. 子任务之间要有逻辑顺序（先整体后细节）
+2. 每个子任务应该是一次简短的 AI 问答能完成的
+3. 最后一个子任务通常是汇总或建议
+4. 严格按 JSON 数组格式返回，不要有其他文字
+
+返回格式：
+[{"title":"步骤标题","prompt":"具体要分析的内容"}]
+
+用户的问题：
+${message}`
+
+    const response = await aiChat.chat(planPrompt, null)
+    const reply = response.reply || response.message || response.result || ''
+    
+    // 尝试从 AI 回复中解析 JSON
+    const tasks = parseTasksFromAI(reply)
+    if (tasks && tasks.length >= 2) {
+      return tasks
+    }
+  } catch (e) {
+    console.warn('AI 规划失败，使用本地切分策略', e)
+  }
+  
+  // 第二步：AI 规划失败时，使用本地启发式切分
+  return localSplitQuestion(message)
+}
+
+/** 从 AI 回复中解析任务列表 */
+const parseTasksFromAI = (reply) => {
+  try {
+    // 尝试直接解析
+    let jsonStr = reply.trim()
+    // 提取 JSON 数组（AI 可能在 JSON 外有额外文字）
+    const match = jsonStr.match(/\[[\s\S]*\]/)
+    if (match) {
+      jsonStr = match[0]
+    }
+    const parsed = JSON.parse(jsonStr)
+    if (Array.isArray(parsed) && parsed.length >= 2) {
+      return parsed.map((item, i) => ({
+        title: item.title || `步骤 ${i + 1}`,
+        prompt: item.prompt || item.task || item.description || item.title
+      }))
+    }
+  } catch (e) {
+    console.warn('解析 AI 任务规划 JSON 失败', e)
+  }
+  return null
+}
+
+/** 本地启发式切分（作为 AI 规划的兜底） */
+const localSplitQuestion = (message) => {
+  // 预定义的切分规则（覆盖常见场景）
+  const splitRules = [
+    {
+      pattern: /业务逻辑|业务流程/,
+      tasks: [
+        { title: '📊 分析项目结构', prompt: '请分析项目结构、技术栈和主要模块' },
+        { title: '🔄 分析业务流程', prompt: '请分析核心业务流程和用户交互流程' },
+        { title: '📦 分析数据流向', prompt: '请分析数据流向和数据存储方式' },
+        { title: '🔗 分析模块关系', prompt: '请分析各模块间的协作关系和调用链路' }
+      ]
+    },
+    {
+      pattern: /架构|系统架构|项目架构/,
+      tasks: [
+        { title: '🏗️ 系统分层', prompt: '请分析系统分层设计和各层职责' },
+        { title: '⚙️ 技术选型', prompt: '请分析技术栈选型及技术决策' },
+        { title: '🧩 模块划分', prompt: '请分析功能模块划分和职责边界' },
+        { title: '✅ 架构评估', prompt: '请评估架构优缺点并提出改进建议' }
+      ]
+    },
+    {
+      pattern: /性能|优化/,
+      tasks: [
+        { title: '⚡ 性能分析', prompt: '请分析当前系统的性能瓶颈' },
+        { title: '🔍 问题定位', prompt: '请定位具体的性能问题点' },
+        { title: '💡 优化方案', prompt: '请提供性能优化方案和最佳实践' },
+        { title: '📈 改进建议', prompt: '请给出具体的实施建议和优先级' }
+      ]
+    },
+    {
+      pattern: /安全|安全性/,
+      tasks: [
+        { title: '🔒 安全分析', prompt: '请分析系统的安全风险点' },
+        { title: '🛡️ 漏洞评估', prompt: '请评估潜在的安全漏洞' },
+        { title: '✅ 防护方案', prompt: '请提供安全防护方案' },
+        { title: '📋 安全建议', prompt: '请给出安全最佳实践建议' }
+      ]
+    },
+    {
+      pattern: /代码质量|代码审查|重构/,
+      tasks: [
+        { title: '📝 代码分析', prompt: '请分析代码质量现状' },
+        { title: '⚠️ 问题识别', prompt: '请识别代码中的问题和风险' },
+        { title: '💡 改进方案', prompt: '请提供代码改进和重构方案' },
+        { title: '📝 最佳实践', prompt: '请给出编码规范和最佳实践' }
+      ]
+    }
+  ]
+  
+  for (const rule of splitRules) {
+    if (rule.pattern.test(message)) {
+      return rule.tasks
+    }
+  }
+  
+  // 通用兜底：按问题的结构自动拆分
+  return generateGenericSplitTasks(message)
+}
+
+/** 通用兜底切分 — 适用于任何复杂问题 */
+const generateGenericSplitTasks = (message) => {
+  const tasks = []
+  
+  // 尝试从用户消息中提取编号列表项
+  const numberedItems = message.match(/\d+[.、）)][^\d\n]+/g)
+  if (numberedItems && numberedItems.length >= 2) {
+    numberedItems.slice(0, 4).forEach((item, i) => {
+      const cleanItem = item.replace(/^\d+[.、）)]\s*/, '').trim()
+      tasks.push({
+        title: `📌 分析：${cleanItem.substring(0, 15)}${cleanItem.length > 15 ? '...' : ''}`,
+        prompt: `请针对以下方面进行详细分析：${cleanItem}`
+      })
+    })
+    if (tasks.length >= 2) return tasks
+  }
+  
+  // 尝试按分号/逗号分隔的并列项拆分
+  const splitBySemicolon = message.split(/[；;]/).map(s => s.trim()).filter(s => s.length > 5)
+  if (splitBySemicolon.length >= 2) {
+    splitBySemicolon.slice(0, 4).forEach((item, i) => {
+      tasks.push({
+        title: `📌 第 ${i + 1} 部分`,
+        prompt: `请针对以下方面进行详细分析：${item}`
+      })
+    })
+    return tasks
+  }
+  
+  // 最终兜底：三段式通用分析
+  return [
+    { title: '📋 总体概述', prompt: `请对以下问题提供总体概述和关键要点：${message}` },
+    { title: '🔍 详细分析', prompt: `请对以下问题进行详细分析和深入探讨：${message}` },
+    { title: '💡 建议与总结', prompt: `请对以下问题给出具体建议、最佳实践和改进方向：${message}` }
+  ]
+}
+
+/** 处理复杂问题（分步执行） */
+const handleComplexQuestion = async (message) => {
+  // 显示用户消息
+  chatMessages.value.push({ role: 'user', content: message })
+  saveChatHistory()
+  aiInput.value = ''
+  aiLoading.value = true
+  
+  try {
+    // 智能切分问题（先尝试 AI 规划，失败则本地切分）
+    chatMessages.value.push({
+      role: 'assistant',
+      content: '🧠 正在分析您的问题，规划分析步骤...'
+    })
+    scrollToBottom()
+    
+    const tasks = await splitComplexQuestion(message)
+    
+    // 更新规划消息
+    chatMessages.value.pop()
+    chatMessages.value.push({
+      role: 'assistant',
+      content: `⏳ 已规划 ${tasks.length} 个分析步骤，开始逐步执行...\n\n${tasks.map((t, i) => `  ${i + 1}. ${t.title}`).join('\n')}`
+    })
+    saveChatHistory()
+    scrollToBottom()
+    
+    // 逐步执行任务
+    const results = []
+    for (let i = 0; i < tasks.length; i++) {
+      const task = tasks[i]
+      
+      // 显示当前步骤
+      chatMessages.value.push({
+        role: 'assistant',
+        content: `${task.title}（${i + 1}/${tasks.length}）\n\n⏳ 正在分析中...`
+      })
+      scrollToBottom()
+      
+      try {
+        // 构建请求（包含项目路径和原始问题背景）
+        const pathContext = projectRoot.value ? `项目路径：${projectRoot.value}\n\n` : ''
+        const fullPrompt = `${pathContext}原始问题：${message}\n\n当前任务：${task.prompt}`
+        
+        const response = await aiChat.chat(fullPrompt, null)
+        const reply = response.reply || response.message || response.result || '收到回复'
+        
+        // 更新消息
+        chatMessages.value.pop()
+        chatMessages.value.push({
+          role: 'assistant',
+          content: `${task.title}（${i + 1}/${tasks.length}）\n\n${reply}`
+        })
+        results.push(reply)
+        saveChatHistory()
+        scrollToBottom()
+        
+        // 步骤间短暂延迟
+        if (i < tasks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      } catch (error) {
+        chatMessages.value.pop()
+        chatMessages.value.push({
+          role: 'assistant',
+          content: `${task.title}（${i + 1}/${tasks.length}）\n\n❌ 此步骤分析失败：${error.response?.data?.reply || error.message}`
+        })
+        results.push(`[此步骤失败]`)
+        saveChatHistory()
+        scrollToBottom()
+      }
+    }
+    
+    // 最后请求 AI 做汇总
+    chatMessages.value.push({
+      role: 'assistant',
+      content: '📊 正在生成汇总报告...'
+    })
+    scrollToBottom()
+    
+    try {
+      const summaryPrompt = `请根据以下分步分析结果，生成一份简洁的汇总报告。\n\n原始问题：${message}\n\n各步骤分析结果：\n${results.map((r, i) => `【${tasks[i].title}】\n${r}`).join('\n\n')}\n\n请用简洁的语言总结关键发现和整体建议。`
+      const summaryResp = await aiChat.chat(summaryPrompt, null)
+      const summary = summaryResp.reply || summaryResp.message || summaryResp.result || ''
+      
+      chatMessages.value.pop()
+      chatMessages.value.push({
+        role: 'assistant',
+        content: `✅ **分析完成 — 汇总报告**\n\n${summary}\n\n---\n📋 共完成 ${tasks.length} 个步骤的分析，详细结果见上方各步骤。`
+      })
+    } catch {
+      // 汇总失败时给出简单完成提示
+      chatMessages.value.pop()
+      chatMessages.value.push({
+        role: 'assistant',
+        content: `✅ 分析完成！共完成 ${tasks.length} 个步骤的分析，请查看上方的详细结果。`
+      })
+    }
+    saveChatHistory()
+    scrollToBottom()
+    
+  } catch (error) {
+    ElMessage.error('分析失败: ' + error.message)
+    chatMessages.value.push({
+      role: 'assistant',
+      content: '❌ 分析时发生错误：' + (error.response?.data?.reply || error.message)
+    })
+    saveChatHistory()
+  } finally {
+    aiLoading.value = false
+  }
+}
+
 /** 快捷操作：解析项目业务逻辑 / 架构 */
-const quickAction = (type) => {
+const quickAction = async (type) => {
   if (aiLoading.value) {
     ElMessage.warning('AI 正在处理中，请稍候...')
     return
   }
-  if (type === 'logic') {
-    aiInput.value = '请详细分析并解析当前项目的业务逻辑，包括核心业务流程、主要功能模块、数据流向以及各模块之间的协作关系。'
-  } else if (type === 'arch') {
-    aiInput.value = '请详细分析并解析当前项目的业务架构，包括系统分层设计、技术选型、模块划分、服务间通信方式、以及整体架构的优缺点。'
+  
+  // 检查是否已加载项目
+  if (!projectRoot.value) {
+    ElMessage.warning('请先加载项目')
+    return
   }
-  sendToAI()
+  
+  // 构造复杂问题消息
+  let message
+  if (type === 'logic') {
+    message = `请全面分析并解析当前项目的业务逻辑，包括：
+1. 项目结构和技术栈
+2. 核心业务流程
+3. 数据流向
+4. 各模块之间的协作关系`
+  } else if (type === 'arch') {
+    message = `请全面分析并解析当前项目的业务架构，包括：
+1. 系统分层设计
+2. 技术选型
+3. 模块划分
+4. 服务间通信方式
+5. 整体架构的优缺点`
+  }
+  
+  // 使用通用复杂问题处理机制
+  aiInput.value = message
+  await handleComplexQuestion(message)
 }
 
 const scrollToBottom = () => {
