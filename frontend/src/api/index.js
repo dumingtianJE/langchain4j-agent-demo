@@ -28,6 +28,7 @@ api.interceptors.response.use(
     console.error('API Error:', error)
     if (error.response) {
       const status = error.response.status
+      const data = error.response.data
       switch (status) {
         case 401:
           ElMessage.error('未授权，请登录')
@@ -42,9 +43,17 @@ api.interceptors.response.use(
         case 500:
           ElMessage.error('服务器错误')
           break
+        case 400:
+          // AI 接口返回的业务错误（包含 reply 字段），由调用方自行处理，不弹 toast
+          if (!data?.reply) {
+            ElMessage.error(data?.message || data?.error || '请求参数错误')
+          }
+          break
         default:
-          ElMessage.error(error.response.data?.message || '请求失败')
+          ElMessage.error(data?.message || '请求失败')
       }
+    } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      ElMessage.error('请求超时，请稍后重试')
     } else if (error.request) {
       ElMessage.error('网络错误，请检查后端服务是否启动')
     } else {
@@ -56,9 +65,9 @@ api.interceptors.response.use(
 
 // ==================== AI 对话 (AiChatController /api/ai) ====================
 export const aiChat = {
-  // 同步对话
+  // 同步对话（AI 回复较慢，单独设置 120s 超时）
   chat: (message, codeContext) =>
-    api.post('/ai/chat', { message, codeContext }),
+    api.post('/ai/chat', { message, codeContext: codeContext || null }, { timeout: 120000 }),
 
   // SSE 流式对话（返回 EventSource URL）
   getStreamUrl: (message, codeContext) => {

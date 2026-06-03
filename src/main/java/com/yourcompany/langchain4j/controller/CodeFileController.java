@@ -27,7 +27,8 @@ public class CodeFileController {
     public ResponseEntity<Map<String, Object>> workspace() {
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "workspaceRoot", codeFileService.getWorkspaceRoot()
+                "workspaceRoot", codeFileService.getWorkspaceRoot(),
+                "projectRoot", codeFileService.getCurrentProjectRoot()
         ));
     }
 

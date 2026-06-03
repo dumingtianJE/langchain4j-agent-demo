@@ -73,6 +73,17 @@
             <template #header>
               <span>AI 助手</span>
             </template>
+            <!-- 快捷操作按钮 -->
+            <div class="quick-actions">
+              <div class="quick-action-card" @click="quickAction('logic')">
+                <el-icon><MagicStick /></el-icon>
+                解析该项目业务逻辑
+              </div>
+              <div class="quick-action-card" @click="quickAction('arch')">
+                <el-icon><MagicStick /></el-icon>
+                解析该项目业务架构
+              </div>
+            </div>
             <div class="chat-messages" ref="chatMessagesRef">
               <div 
                 v-for="(msg, index) in chatMessages" 
@@ -107,15 +118,40 @@
     
     <!-- 加载项目对话框 -->
     <el-dialog v-model="loadDialogVisible" title="加载项目" width="520px">
-      <p class="dialog-tip">
-        输入项目目录路径。Docker 部署请使用 <code>/app/workspace</code> 或 <code>.</code>；
-        本地运行可使用项目绝对路径。
+      <!-- 模式切换 -->
+      <div class="mode-switch">
+        <span class="mode-label">加载模式：</span>
+        <el-radio-group v-model="loadMode" size="default">
+          <el-radio-button value="docker">Docker 部署</el-radio-button>
+          <el-radio-button value="local">本地项目</el-radio-button>
+        </el-radio-group>
+      </div>
+      <p class="dialog-tip" v-if="loadMode === 'docker'">
+        Docker 部署模式下，项目运行在容器内。请输入容器内路径，通常使用
+        <code>/app/workspace</code> 或 <code>.</code>（当前工作目录）。
+      </p>
+      <p class="dialog-tip" v-else>
+        <template v-if="isDockerEnv">
+          <strong style="color: #f56c6c;">注意：</strong>当前后端运行在 Docker 容器中，
+          无法直接访问本机 Windows 路径。本地项目需要通过 Docker volumes 挂载，
+          请使用挂载后的容器路径（如 <code>/app/workspace</code>）。
+        </template>
+        <template v-else>
+          本地模式下，可直接输入本机任意项目目录的绝对路径，例如
+          <code>D:\projects\my-app</code> 或 <code>/home/user/projects/my-app</code>。
+        </template>
       </p>
       <el-input
         v-model="loadFilePath"
-        placeholder="例如: . 或 /app/workspace"
+        :placeholder="getInputPlaceholder()"
         @keyup.enter="confirmLoadProject"
+        @input="onPathInput"
       />
+      <!-- 路径类型提示 -->
+      <div class="path-hint" v-if="pathHint">
+        <el-icon style="margin-right: 4px;"><WarningFilled /></el-icon>
+        {{ pathHint }}
+      </div>
       <template #footer>
         <el-button @click="loadDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmLoadProject" :loading="treeLoading">确定</el-button>
@@ -126,7 +162,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { FolderOpened, Download, MagicStick, Refresh } from '@element-plus/icons-vue'
+import { FolderOpened, Download, MagicStick, Refresh, WarningFilled } from '@element-plus/icons-vue'
 import { codeFile, aiChat } from '../api'
 import { ElMessage } from 'element-plus'
 
@@ -136,6 +172,9 @@ const isModified = ref(false)
 const isSaving = ref(false)
 const loadDialogVisible = ref(false)
 const loadFilePath = ref('.')
+const loadMode = ref('local')
+const isDockerEnv = ref(false)   // 后端是否运行在 Docker/Linux 容器中
+const pathHint = ref('')          // 路径输入提示信息
 const aiInput = ref('')
 const aiLoading = ref(false)
 const chatMessages = ref([])
@@ -155,11 +194,51 @@ onMounted(async () => {
   try {
     const res = await codeFile.getWorkspace()
     workspaceRoot.value = res.workspaceRoot || ''
-    loadFilePath.value = '.'
+    // 根据工作区路径判断后端是否运行在 Docker/Linux 容器中
+    isDockerEnv.value = workspaceRoot.value.startsWith('/') && workspaceRoot.value.includes('/app')
+    if (isDockerEnv.value) {
+      loadMode.value = 'docker'
+      loadFilePath.value = '.'
+    } else {
+      loadMode.value = 'local'
+      loadFilePath.value = workspaceRoot.value || '.'
+    }
   } catch {
     loadFilePath.value = '.'
   }
 })
+
+/** 检测 Windows 风格路径（如 D:\... 或 C:/...） */
+const isWindowsPath = (p) => /^[A-Za-z]:[/\\]/.test(p)
+
+/** 输入框 placeholder */
+const getInputPlaceholder = () => {
+  if (loadMode.value === 'docker') return '例如: /app/workspace 或 .'
+  if (isDockerEnv.value) return 'Docker 容器中请使用 /app/workspace'
+  return '例如: D:\\projects\\my-app 或 /home/user/project'
+}
+
+/** 路径输入时检测并给出提示 */
+const onPathInput = (val) => {
+  pathHint.value = ''
+  if (!val) return
+  const trimmed = val.trim()
+  // 在 Docker 环境中输入 Windows 路径
+  if (isDockerEnv.value && isWindowsPath(trimmed) && loadMode.value === 'local') {
+    pathHint.value = '检测到 Windows 路径，但后端在 Docker 容器中无法直接访问。请切换到「Docker 部署」模式。'
+    return
+  }
+  // 在 Docker 模式下输入 Windows 路径
+  if (isDockerEnv.value && isWindowsPath(trimmed) && loadMode.value === 'docker') {
+    pathHint.value = 'Windows 路径无法在 Docker 容器中使用，请使用容器内路径如 /app/workspace'
+    return
+  }
+  // 在非 Docker 环境中输入 Linux 绝对路径
+  if (!isDockerEnv.value && trimmed.startsWith('/') && loadMode.value === 'docker') {
+    pathHint.value = '检测到 Linux 绝对路径，建议切换到「本地项目」模式。'
+    return
+  }
+}
 
 const markModified = () => {
   isModified.value = true
@@ -178,18 +257,30 @@ const toTreeNode = (node) => {
 }
 
 const loadFile = () => {
+  // 打开对话框时，根据模式设置默认路径
+  if (loadMode.value === 'docker') {
+    loadFilePath.value = projectRoot.value || '.'
+  } else {
+    loadFilePath.value = projectRoot.value || workspaceRoot.value || '.'
+  }
   loadDialogVisible.value = true
 }
 
 const confirmLoadProject = async () => {
-  const path = loadFilePath.value?.trim() || '.'
+  let path = loadFilePath.value?.trim() || '.'
+  // 前端预校验：Docker 环境中拦截 Windows 路径
+  if (isDockerEnv.value && isWindowsPath(path)) {
+    ElMessage.warning('后端运行在 Docker 容器中，无法访问 Windows 本地路径。请使用容器内路径（如 /app/workspace），或将本地目录挂载到容器中。')
+    return
+  }
   treeLoading.value = true
   try {
     const res = await codeFile.loadTree(path)
     const data = res.data || {}
     const treeNode = data.tree
     fileTree.value = treeNode ? [toTreeNode(treeNode)] : []
-    projectRoot.value = data.root || path
+    projectRoot.value = data.projectRoot || data.root || path
+    workspaceRoot.value = data.projectRoot || data.absolutePath || path
     loadDialogVisible.value = false
     ElMessage.success(`项目已加载: ${data.absolutePath || path}`)
   } catch (error) {
@@ -262,20 +353,55 @@ const sendToAI = async () => {
   aiLoading.value = true
   
   try {
-    const response = await aiChat.chat(userMessage, codeContent.value.substring(0, 8000))
+    // 仅在有代码内容时才传 codeContext
+    const context = codeContent.value?.trim() ? codeContent.value.substring(0, 8000) : null
+    const response = await aiChat.chat(userMessage, context)
     chatMessages.value.push({
       role: 'assistant',
       content: response.reply || response.message || response.result || '收到回复'
     })
     scrollToBottom()
   } catch (error) {
+    let errMsg = '❌ 请求失败'
+    if (error.response) {
+      const data = error.response.data
+      // 后端返回的业务错误信息
+      if (data?.reply) {
+        errMsg = data.reply
+      } else if (data?.message) {
+        errMsg = '❌ ' + data.message
+      } else {
+        errMsg = `❌ 请求失败 (${error.response.status})`
+      }
+    } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      errMsg = '❌ AI 响应超时，请稍后重试或缩短问题内容'
+    } else if (error.request) {
+      errMsg = '❌ 网络连接失败，请检查后端服务是否正常运行'
+    } else {
+      errMsg = '❌ ' + error.message
+    }
     chatMessages.value.push({
       role: 'assistant',
-      content: '❌ 请求失败: ' + error.message
+      content: errMsg
     })
+    scrollToBottom()
   } finally {
     aiLoading.value = false
   }
+}
+
+/** 快捷操作：解析项目业务逻辑 / 架构 */
+const quickAction = (type) => {
+  if (aiLoading.value) {
+    ElMessage.warning('AI 正在处理中，请稍候...')
+    return
+  }
+  if (type === 'logic') {
+    aiInput.value = '请详细分析并解析当前项目的业务逻辑，包括核心业务流程、主要功能模块、数据流向以及各模块之间的协作关系。'
+  } else if (type === 'arch') {
+    aiInput.value = '请详细分析并解析当前项目的业务架构，包括系统分层设计、技术选型、模块划分、服务间通信方式、以及整体架构的优缺点。'
+  }
+  sendToAI()
 }
 
 const scrollToBottom = () => {
@@ -363,6 +489,32 @@ const scrollToBottom = () => {
   border-radius: 4px;
 }
 
+.mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mode-label {
+  font-size: 14px;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.path-hint {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #e6a23c;
+  background: rgba(230, 162, 60, 0.1);
+  border: 1px solid rgba(230, 162, 60, 0.3);
+  border-radius: 6px;
+  line-height: 1.5;
+}
+
 :deep(.el-tree) {
   background: transparent;
   color: var(--text-primary);
@@ -443,6 +595,39 @@ const scrollToBottom = () => {
 .chat-input {
   border-top: 1px solid var(--border-glow);
   padding-top: 16px;
+}
+
+.quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.quick-action-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.6), rgba(99, 102, 241, 0.6));
+  border: 1px solid rgba(124, 58, 237, 0.4);
+  transition: all 0.25s ease;
+}
+
+.quick-action-card:hover {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.85), rgba(99, 102, 241, 0.85));
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.35);
+  transform: translateY(-1px);
+}
+
+.quick-action-card .el-icon {
+  font-size: 16px;
+  color: #c084fc;
 }
 
 :deep(.el-textarea__inner)::-webkit-scrollbar,

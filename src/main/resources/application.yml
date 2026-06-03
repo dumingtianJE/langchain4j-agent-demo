@@ -58,7 +58,7 @@ server:
 langchain4j:
   open-ai:
     chat-model:
-      api-key: ${DASHSCOPE_API_KEY:sk-b1095efa41cf4fee82ef4e13ae6a6c9f}
+      api-key: ${DASHSCOPE_API_KEY:sk-b295fa8e7568409cb45e9e1e206c3407}
       base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       model-name: ${DASHSCOPE_MODEL:qwen-max}
       temperature: 0.7
@@ -67,7 +67,7 @@ langchain4j:
       log-requests: ${LOG_REQUESTS:false}
       log-responses: ${LOG_RESPONSES:false}
     streaming-chat-model:
-      api-key: ${DASHSCOPE_API_KEY:sk-b1095efa41cf4fee82ef4e13ae6a6c9f}
+      api-key: ${DASHSCOPE_API_KEY:sk-b295fa8e7568409cb45e9e1e206c3407}
       base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       model-name: ${DASHSCOPE_MODEL:qwen-max}
       temperature: 0.7

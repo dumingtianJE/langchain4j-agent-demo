@@ -29,7 +29,13 @@ public class CodeFileService {
     private static final int MAX_TREE_DEPTH = 12;
     private static final long MAX_READ_BYTES = 2 * 1024 * 1024;
 
+    /** 是否运行在 Linux 容器内（Docker 部署） */
+    private static final boolean IS_LINUX = System.getProperty("os.name", "").toLowerCase().contains("linux");
+
     private final Path workspaceRoot;
+
+    /** 当前已加载的项目根目录（可能与 workspaceRoot 不同） */
+    private volatile Path currentProjectRoot;
 
     public CodeFileService(@Value("${app.code.workspace-root:}") String workspaceRootConfig) {
         if (workspaceRootConfig != null && !workspaceRootConfig.isBlank()) {
@@ -37,6 +43,7 @@ public class CodeFileService {
         } else {
             this.workspaceRoot = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
         }
+        this.currentProjectRoot = this.workspaceRoot;
         log.info("代码工作区根目录: {}", this.workspaceRoot);
     }
 
@@ -44,21 +51,56 @@ public class CodeFileService {
         return workspaceRoot.toString();
     }
 
+    public String getCurrentProjectRoot() {
+        return currentProjectRoot.toString();
+    }
+
     /**
-     * 解析并校验路径，必须位于工作区根目录下
+     * 检测 Windows 风格路径（如 C:\... 或 D:\...）
+     */
+    private static boolean isWindowsStylePath(String path) {
+        return path != null && path.length() >= 3
+                && Character.isLetter(path.charAt(0))
+                && path.charAt(1) == ':'
+                && (path.charAt(2) == '\\' || path.charAt(2) == '/');
+    }
+
+    /**
+     * 校验输入路径，在 Linux 容器中拒绝 Windows 路径并给出清晰提示
+     */
+    private void validatePath(String inputPath) throws IOException {
+        if (inputPath == null || inputPath.isBlank()) return;
+        String trimmed = inputPath.trim();
+        if (IS_LINUX && isWindowsStylePath(trimmed)) {
+            throw new IOException(
+                    "当前后端运行在 Docker/Linux 容器中，无法直接访问 Windows 本地路径「" + trimmed + "」。" +
+                    "请切换到「Docker 部署」模式，使用容器内路径（如 /app/workspace 或 .）；" +
+                    "如需访问本机项目，请确保目录已通过 Docker volumes 挂载到容器中。"
+            );
+        }
+    }
+
+    /**
+     * 解析并校验路径。
+     * - 相对路径基于当前项目根目录解析
+     * - 绝对路径直接使用，允许加载工作区外的本地项目
      */
     public Path resolveSafe(String inputPath) throws IOException {
+        validatePath(inputPath);
         Path resolved;
         if (inputPath == null || inputPath.isBlank() || ".".equals(inputPath.trim())) {
-            resolved = workspaceRoot;
+            resolved = currentProjectRoot;
         } else {
             Path candidate = Paths.get(inputPath.trim());
-            resolved = candidate.isAbsolute()
-                    ? candidate.normalize()
-                    : workspaceRoot.resolve(candidate).normalize();
+            if (candidate.isAbsolute()) {
+                resolved = candidate.normalize();
+            } else {
+                resolved = currentProjectRoot.resolve(candidate).normalize();
+            }
         }
-        if (!resolved.startsWith(workspaceRoot)) {
-            throw new IOException("路径越界，仅允许访问工作区: " + workspaceRoot);
+        // 安全检查：路径必须位于当前项目根或工作区根之下
+        if (!resolved.startsWith(currentProjectRoot) && !resolved.startsWith(workspaceRoot)) {
+            throw new IOException("路径越界，仅允许访问已加载的项目目录: " + currentProjectRoot);
         }
         if (!Files.exists(resolved)) {
             throw new IOException("路径不存在: " + resolved);
@@ -67,27 +109,41 @@ public class CodeFileService {
     }
 
     public Map<String, Object> buildDirectoryTree(String inputPath) throws IOException {
-        Path root = resolveSafe(inputPath);
+        validatePath(inputPath);
+        Path root;
+        if (inputPath == null || inputPath.isBlank() || ".".equals(inputPath.trim())) {
+            root = currentProjectRoot;
+        } else {
+            Path candidate = Paths.get(inputPath.trim());
+            root = candidate.isAbsolute()
+                    ? candidate.normalize()
+                    : currentProjectRoot.resolve(candidate).normalize();
+        }
+        if (!Files.exists(root)) {
+            throw new IOException("路径不存在: " + root);
+        }
         if (!Files.isDirectory(root)) {
             throw new IOException("不是目录: " + root);
         }
-        String relativeRoot = workspaceRoot.relativize(root).toString().replace('\\', '/');
-        if (relativeRoot.isEmpty()) {
-            relativeRoot = ".";
-        }
+        // 更新当前项目根，后续文件操作基于此目录
+        this.currentProjectRoot = root;
+        log.info("已加载项目目录: {}", root);
+
+        String relativeRoot = ".";
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("root", relativeRoot);
         result.put("absolutePath", root.toString());
         result.put("workspaceRoot", workspaceRoot.toString());
+        result.put("projectRoot", currentProjectRoot.toString());
         result.put("tree", buildTreeNode(root, 0));
         return result;
     }
 
     private Map<String, Object> buildTreeNode(Path dir, int depth) throws IOException {
         Map<String, Object> node = new LinkedHashMap<>();
-        String rel = workspaceRoot.relativize(dir).toString().replace('\\', '/');
+        String rel = currentProjectRoot.relativize(dir).toString().replace('\\', '/');
         if (rel.isEmpty()) {
-            rel = workspaceRoot.getFileName().toString();
+            rel = currentProjectRoot.getFileName() != null ? currentProjectRoot.getFileName().toString() : "project";
         }
         node.put("name", dir.getFileName() != null ? dir.getFileName().toString() : rel);
         node.put("path", rel.isEmpty() ? "." : rel);
@@ -127,7 +183,7 @@ public class CodeFileService {
 
     private Map<String, Object> buildFileNode(Path file) {
         Map<String, Object> node = new LinkedHashMap<>();
-        String rel = workspaceRoot.relativize(file).toString().replace('\\', '/');
+        String rel = currentProjectRoot.relativize(file).toString().replace('\\', '/');
         node.put("name", file.getFileName().toString());
         node.put("path", rel);
         node.put("type", "file");
@@ -161,7 +217,7 @@ public class CodeFileService {
             throw new IOException("文件过大（>" + MAX_READ_BYTES + " 字节）: " + file);
         }
         String content = Files.readString(file, StandardCharsets.UTF_8);
-        String rel = workspaceRoot.relativize(file).toString().replace('\\', '/');
+        String rel = currentProjectRoot.relativize(file).toString().replace('\\', '/');
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("path", rel);
         result.put("content", content);
@@ -179,7 +235,7 @@ public class CodeFileService {
             Files.createDirectories(parent);
         }
         Files.writeString(file, content != null ? content : "", StandardCharsets.UTF_8);
-        String rel = workspaceRoot.relativize(file).toString().replace('\\', '/');
+        String rel = currentProjectRoot.relativize(file).toString().replace('\\', '/');
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("path", rel);
         result.put("message", "文件已保存");
