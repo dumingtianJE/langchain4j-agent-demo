@@ -2,6 +2,7 @@ package com.yourcompany.langchain4j.controller;
 
 import com.yourcompany.langchain4j.agent.AiProgrammingAgent;
 import com.yourcompany.langchain4j.security.PromptInjectionGuard;
+import com.yourcompany.langchain4j.service.CodeFileService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -35,6 +36,7 @@ public class AiChatController {
     private final AiProgrammingAgent aiProgrammingAgent;
     private final StreamingChatModel streamingChatModel;
     private final PromptInjectionGuard promptInjectionGuard;
+    private final CodeFileService codeFileService;
     
     // 异步执行线程池（用于流式响应）
     private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
@@ -61,12 +63,19 @@ public class AiChatController {
         try {
             String response;
             
+            // 构建用户消息（自动注入项目工作区路径）
+            String userContent = request.getMessage();
+            String projectContext = buildProjectContextHint(userContent);
+            if (!projectContext.isEmpty()) {
+                userContent = projectContext + "\n\n" + userContent;
+                log.info("已注入项目上下文提示，工作区: {}", codeFileService.getCurrentProjectRoot());
+            }
+            
             if (request.getCodeContext() != null && !request.getCodeContext().isEmpty()) {
-                response = aiProgrammingAgent.answerTechnicalQuestion(
-                    request.getMessage() + "\n\n相关代码:\n" + request.getCodeContext()
-                );
+                userContent = userContent + "\n\n相关代码:\n" + request.getCodeContext();
+                response = aiProgrammingAgent.answerTechnicalQuestion(userContent);
             } else {
-                response = aiProgrammingAgent.answerTechnicalQuestion(request.getMessage());
+                response = aiProgrammingAgent.answerTechnicalQuestion(userContent);
             }
             
             return ResponseEntity.ok(Map.of(
@@ -220,6 +229,64 @@ public class AiChatController {
     }
     
     /**
+     * 获取项目上下文摘要（结构化项目分析，供前端 AI 助手使用）
+     * 整合 CodeFileService 和 ProjectContextTool 的能力
+     */
+    @GetMapping("/project-context")
+    public ResponseEntity<Map<String, Object>> projectContext() {
+        try {
+            String projectRoot = codeFileService.getCurrentProjectRoot();
+            String workspaceRoot = codeFileService.getWorkspaceRoot();
+            
+            // 获取目录树（浅层，最多3层，用于摘要）
+            Map<String, Object> treeData = codeFileService.buildDirectoryTree(".");
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "projectRoot", projectRoot,
+                "workspaceRoot", workspaceRoot,
+                "treeSummary", summarizeTree(treeData),
+                "timestamp", System.currentTimeMillis()
+            ));
+        } catch (Exception e) {
+            log.warn("获取项目上下文失败: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", "获取项目上下文失败: " + e.getMessage()
+            ));
+        }
+    }
+    
+    /** 将目录树压缩为文本摘要（最多展示前50个条目） */
+    private String summarizeTree(Map<String, Object> treeData) {
+        Object tree = treeData.get("tree");
+        if (tree == null) return "无法获取目录树";
+        StringBuilder sb = new StringBuilder();
+        flattenTree(tree, "", 0, sb, new int[]{0}, 50);
+        return sb.toString();
+    }
+    
+    @SuppressWarnings("unchecked")
+    private void flattenTree(Object node, String indent, int depth, StringBuilder sb, int[] counter, int max) {
+        if (node == null || counter[0] >= max) return;
+        if (!(node instanceof Map)) return;
+        Map<String, Object> map = (Map<String, Object>) node;
+        String name = String.valueOf(map.getOrDefault("name", ""));
+        String type = String.valueOf(map.getOrDefault("type", ""));
+        counter[0]++;
+        sb.append(indent).append("directory".equals(type) ? "📁 " : "📄 ").append(name).append("\n");
+        if ("directory".equals(type) && depth < 3) {
+            Object children = map.get("children");
+            if (children instanceof List) {
+                for (Object child : (List<?>) children) {
+                    if (counter[0] >= max) break;
+                    flattenTree(child, indent + "  ", depth + 1, sb, counter, max);
+                }
+            }
+        }
+    }
+    
+    /**
      * 聊天请求 DTO
      */
     @Data
@@ -227,5 +294,24 @@ public class AiChatController {
         private String message;
         private String codeContext;
         private String userId;
+    }
+    
+    /**
+     * 检测消息是否涉及项目分析，自动注入工作区路径提示
+     * 触发关键词：分析/架构/业务/项目结构/代码结构/模块/技术栈/依赖
+     */
+    private String buildProjectContextHint(String message) {
+        if (message == null || message.isBlank()) return "";
+        String lower = message.toLowerCase();
+        boolean projectRelated = lower.contains("分析") || lower.contains("架构") 
+                || lower.contains("业务") || lower.contains("项目结构")
+                || lower.contains("代码结构") || lower.contains("模块")
+                || lower.contains("技术栈") || lower.contains("依赖")
+                || lower.contains("解析") || lower.contains("全量")
+                || lower.contains("业务逻辑") || lower.contains("业务架构");
+        if (!projectRelated) return "";
+        String projectRoot = codeFileService.getCurrentProjectRoot();
+        return "【系统上下文】当前项目工作区路径为: " + projectRoot 
+                + "\n请使用工具主动读取和分析该项目，不要说无法访问项目。";
     }
 }

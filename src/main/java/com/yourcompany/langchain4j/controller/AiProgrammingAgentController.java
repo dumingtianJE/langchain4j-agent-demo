@@ -1,6 +1,8 @@
 package com.yourcompany.langchain4j.controller;
 
+import com.yourcompany.langchain4j.agent.AgentOrchestrator;
 import com.yourcompany.langchain4j.agent.AiProgrammingAgent;
+import com.yourcompany.langchain4j.agent.OrchestrationResult;
 import com.yourcompany.langchain4j.knowledge.KnowledgeBaseManager;
 import com.yourcompany.langchain4j.knowledge.KnowledgeDocument;
 import com.yourcompany.langchain4j.learning.LearningExperience;
@@ -32,10 +34,67 @@ import java.util.Map;
 public class AiProgrammingAgentController {
     
     private final AiProgrammingAgent aiProgrammingAgent;
+    private final AgentOrchestrator agentOrchestrator;
     private final KnowledgeBaseManager knowledgeBaseManager;
     private final SkillManager skillManager;
     private final SelfLearningManager selfLearningManager;
     private final AiSupervisor aiSupervisor;
+    
+    /**
+     * 智能编排入口（统一调度所有子 Agent）
+     * 自动识别意图 → 选择流水线 → 多步骤执行 → 聚合结果
+     * 
+     * 支持的意图：
+     * - code_generation: [代码生成 → 代码审查]
+     * - code_review: [代码审查]
+     * - analysis: [技术分析]
+     * - documentation: [文档生成]
+     * - complex_task: [项目分析 → 代码实现 → 代码审查 → 文档生成]
+     * - general: [智能问答]
+     */
+    @PostMapping("/orchestrate")
+    public ResponseEntity<Map<String, Object>> orchestrate(@RequestBody OrchestrateRequest request) {
+        log.info("收到编排请求: message长度={}, hasCodeContext={}",
+                request.getMessage() != null ? request.getMessage().length() : 0,
+                request.getCodeContext() != null && !request.getCodeContext().isBlank());
+        
+        OrchestrationResult result = agentOrchestrator.orchestrate(
+                request.getMessage(),
+                request.getCodeContext()
+        );
+        
+        // 记录 Token 使用（估算）
+        if (result.isSuccess()) {
+            TokenUsageRecord record = new TokenUsageRecord();
+            record.setAgentName("AgentOrchestrator");
+            record.setUserId(request.getUserId());
+            record.setRequestType("orchestrate:" + result.getIntent());
+            int inputEstimate = (request.getMessage() != null ? request.getMessage().length() : 0) / 4;
+            int outputEstimate = (result.getFinalResult() != null ? result.getFinalResult().length() : 0) / 4;
+            record.setInputTokens(inputEstimate);
+            record.setOutputTokens(outputEstimate);
+            record.setTotalTokens(inputEstimate + outputEstimate);
+            record.setDurationMs(result.getTotalDurationMs());
+            aiSupervisor.recordTokenUsage(record);
+        }
+        
+        if (result.isSuccess()) {
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "intent", result.getIntent(),
+                    "intentLabel", result.getIntentLabel(),
+                    "pipeline", result.getPipeline(),
+                    "steps", result.getSteps(),
+                    "finalResult", result.getFinalResult() != null ? result.getFinalResult() : "",
+                    "totalDurationMs", result.getTotalDurationMs()
+            ));
+        } else {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "error", result.getErrorMessage() != null ? result.getErrorMessage() : "编排执行失败"
+            ));
+        }
+    }
     
     /**
      * 执行编程任务
@@ -367,6 +426,13 @@ public class AiProgrammingAgentController {
     }
     
     // 请求 DTO 类
+    
+    @Data
+    public static class OrchestrateRequest {
+        private String userId;
+        private String message;
+        private String codeContext;
+    }
     
     @Data
     public static class ExecuteTaskRequest {

@@ -76,12 +76,23 @@ export const aiChat = {
     return `/api/ai/chat/stream?${params.toString()}`
   },
 
+  // 获取项目上下文摘要（用于 AI 项目分析）
+  getProjectContext: () =>
+    api.get('/ai/project-context'),
+
   // 健康检查
   health: () => api.get('/ai/health')
 }
 
 // ==================== AI 编程 Agent (/api/ai-programming-agent) ====================
 export const aiProgramming = {
+  // 智能编排（自动识别意图 → 多步骤流水线 → 聚合结果）
+  orchestrate: (message, codeContext, userId) =>
+    api.post('/ai-programming-agent/orchestrate',
+      { message, codeContext, userId },
+      { timeout: 600000 }  // 10分钟，复杂任务可能包含 4 次 LLM 调用
+    ),
+
   // 执行编程任务
   executeTask: (task, context, userId) =>
     api.post('/ai-programming-agent/execute', { task, context, userId }),

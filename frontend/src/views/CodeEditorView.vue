@@ -174,7 +174,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { FolderOpened, Download, MagicStick, Refresh, WarningFilled, Delete } from '@element-plus/icons-vue'
-import { codeFile, aiChat } from '../api'
+import { codeFile, aiChat, aiProgramming } from '../api'
 import { ElMessage } from 'element-plus'
 
 // ==================== 会话持久化（localStorage） ====================
@@ -228,6 +228,10 @@ const aiInput = ref('')
 const aiLoading = ref(false)
 const chatMessages = ref([])
 const chatMessagesRef = ref(null)
+
+// 项目上下文缓存（用于 AI 分析时自动注入）
+const projectTreeSummary = ref('')
+const projectRootPath = ref('')
 
 const fileTree = ref([])
 const projectRoot = ref('')
@@ -311,7 +315,23 @@ onMounted(async () => {
     chatMessages.value = savedChat
     scrollToBottom()
   }
+
+  // 预加载项目上下文（用于 AI 项目分析时自动注入）
+  loadProjectContext()
 })
+
+/** 从后端获取项目上下文摘要并缓存 */
+const loadProjectContext = async () => {
+  try {
+    const res = await aiChat.getProjectContext()
+    if (res.success) {
+      projectRootPath.value = res.projectRoot || ''
+      projectTreeSummary.value = res.treeSummary || ''
+    }
+  } catch {
+    // 项目上下文加载失败不影响其他功能
+  }
+}
 
 /** 检测 Windows 风格路径（如 D:\... 或 C:/...） */
 const isWindowsPath = (p) => /^[A-Za-z]:[/\\]/.test(p)
@@ -462,15 +482,16 @@ const sendToAI = async () => {
   // 如果已加载项目，自动附加项目路径信息供AI使用
   if (projectRoot.value) {
     const pathInfo = `\n\n【当前项目路径】: ${projectRoot.value}`
-    // 对于解析项目类的请求，附加路径信息
-    if (userMessage.includes('解析项目') || userMessage.includes('分析项目') || 
-        userMessage.includes('业务逻辑') || userMessage.includes('业务架构')) {
+    // 对于涉及项目分析类的请求，附加路径信息
+    const projectKeywords = ['解析', '分析', '业务逻辑', '业务架构', '项目结构', 
+      '代码结构', '模块', '技术栈', '依赖', '架构', '全量', '流程']
+    if (projectKeywords.some(kw => userMessage.includes(kw))) {
       userMessage += pathInfo
     }
   }
   
-  // 检测是否为复杂问题，如果是则使用分步处理
-  if (isComplexQuestion(userMessage)) {
+  // 检测是否为复杂问题或适合编排器处理的请求（代码生成/审查/复合任务）
+  if (isComplexQuestion(userMessage) || isOrchestratorCandidate(userMessage)) {
     await handleComplexQuestion(userMessage)
     return
   }
@@ -481,8 +502,14 @@ const sendToAI = async () => {
   aiLoading.value = true
   
   try {
-    // 仅在有代码内容时才传 codeContext
-    const context = codeContent.value?.trim() ? codeContent.value.substring(0, 8000) : null
+    // 构建 codeContext：优先传代码内容，否则传项目路径+文件树摘要，让 AI 知道项目位置
+    let context = codeContent.value?.trim() ? codeContent.value.substring(0, 8000) : null
+    if (!context && projectRoot.value) {
+      context = `【项目工作区路径】: ${projectRoot.value}`
+      if (projectTreeSummary.value) {
+        context += `\n\n【项目文件结构摘要】:\n${projectTreeSummary.value}`
+      }
+    }
     const response = await aiChat.chat(userMessage, context)
     chatMessages.value.push({
       role: 'assistant',
@@ -572,10 +599,32 @@ const isComplexQuestion = (message) => {
          hasDeepAnalysis || hasMultipleAspects || hasComplexKeyword
 }
 
+/** 检测是否适合走 AgentOrchestrator 编排器（代码生成/审查/文档等意图） */
+const isOrchestratorCandidate = (message) => {
+  const orchestratorKeywords = [
+    // 代码生成类
+    '写代码', '编写代码', '生成代码', '实现代码', '代码实现',
+    '帮我写', '写一个', '编写一个', '实现一个', '创建一个',
+    '用java', '用python', '用go', '用rust', '用javascript',
+    '实现功能', '添加功能', '新增功能', '开发功能',
+    // 代码审查类
+    '代码审查', '审查代码', 'review', '代码review',
+    '代码质量', '检查代码', '代码问题', '代码缺陷',
+    // 文档类
+    '生成文档', '编写文档', '写文档', '技术文档',
+    'api文档', '接口文档', '使用文档', '说明文档',
+    // 复合意图
+    '实现并审查', '开发并测试', '设计并实现'
+  ]
+  const lower = message.toLowerCase()
+  return orchestratorKeywords.some(kw => lower.includes(kw))
+}
+
 /** 智能切分复杂问题 — 先让 AI 规划，再逐步执行 */
 const splitComplexQuestion = async (message) => {
   // 第一步：尝试让 AI 智能规划子任务
   try {
+    const projectHint = projectRoot.value ? `\n\n项目工作区路径：${projectRoot.value}` : ''
     const planPrompt = `你是一个任务规划专家。请将以下复杂问题拆分为 2~4 个独立的子任务，每个子任务用一句话描述要做什么。
 
 要求：
@@ -588,7 +637,7 @@ const splitComplexQuestion = async (message) => {
 [{"title":"步骤标题","prompt":"具体要分析的内容"}]
 
 用户的问题：
-${message}`
+${message}${projectHint}`
 
     const response = await aiChat.chat(planPrompt, null)
     const reply = response.reply || response.message || response.result || ''
@@ -631,30 +680,31 @@ const parseTasksFromAI = (reply) => {
 
 /** 本地启发式切分（作为 AI 规划的兜底） */
 const localSplitQuestion = (message) => {
+  const projectPath = projectRoot.value || '/app/workspace'
   // 预定义的切分规则（覆盖常见场景）
   const splitRules = [
     {
       pattern: /业务逻辑|业务流程/,
       tasks: [
-        { title: '📊 分析项目结构', prompt: '请分析项目结构、技术栈和主要模块' },
-        { title: '🔄 分析业务流程', prompt: '请分析核心业务流程和用户交互流程' },
-        { title: '📦 分析数据流向', prompt: '请分析数据流向和数据存储方式' },
-        { title: '🔗 分析模块关系', prompt: '请分析各模块间的协作关系和调用链路' }
+        { title: '📊 分析项目结构', prompt: `请分析项目 ${projectPath} 的结构、技术栈和主要模块` },
+        { title: '🔄 分析业务流程', prompt: `请分析项目 ${projectPath} 的核心业务流程和用户交互流程` },
+        { title: '📦 分析数据流向', prompt: `请分析项目 ${projectPath} 的数据流向和数据存储方式` },
+        { title: '🔗 分析模块关系', prompt: `请分析项目 ${projectPath} 各模块间的协作关系和调用链路` }
       ]
     },
     {
       pattern: /架构|系统架构|项目架构/,
       tasks: [
-        { title: '🏗️ 系统分层', prompt: '请分析系统分层设计和各层职责' },
-        { title: '⚙️ 技术选型', prompt: '请分析技术栈选型及技术决策' },
-        { title: '🧩 模块划分', prompt: '请分析功能模块划分和职责边界' },
-        { title: '✅ 架构评估', prompt: '请评估架构优缺点并提出改进建议' }
+        { title: '🏗️ 系统分层', prompt: `请分析项目 ${projectPath} 的系统分层设计和各层职责` },
+        { title: '⚙️ 技术选型', prompt: `请分析项目 ${projectPath} 的技术栈选型及技术决策` },
+        { title: '🧩 模块划分', prompt: `请分析项目 ${projectPath} 的功能模块划分和职责边界` },
+        { title: '✅ 架构评估', prompt: `请评估项目 ${projectPath} 的架构优缺点并提出改进建议` }
       ]
     },
     {
       pattern: /性能|优化/,
       tasks: [
-        { title: '⚡ 性能分析', prompt: '请分析当前系统的性能瓶颈' },
+        { title: '⚡ 性能分析', prompt: `请分析项目 ${projectPath} 的性能瓶颈` },
         { title: '🔍 问题定位', prompt: '请定位具体的性能问题点' },
         { title: '💡 优化方案', prompt: '请提供性能优化方案和最佳实践' },
         { title: '📈 改进建议', prompt: '请给出具体的实施建议和优先级' }
@@ -663,7 +713,7 @@ const localSplitQuestion = (message) => {
     {
       pattern: /安全|安全性/,
       tasks: [
-        { title: '🔒 安全分析', prompt: '请分析系统的安全风险点' },
+        { title: '🔒 安全分析', prompt: `请分析项目 ${projectPath} 的安全风险点` },
         { title: '🛡️ 漏洞评估', prompt: '请评估潜在的安全漏洞' },
         { title: '✅ 防护方案', prompt: '请提供安全防护方案' },
         { title: '📋 安全建议', prompt: '请给出安全最佳实践建议' }
@@ -672,7 +722,7 @@ const localSplitQuestion = (message) => {
     {
       pattern: /代码质量|代码审查|重构/,
       tasks: [
-        { title: '📝 代码分析', prompt: '请分析代码质量现状' },
+        { title: '📝 代码分析', prompt: `请分析项目 ${projectPath} 的代码质量现状` },
         { title: '⚠️ 问题识别', prompt: '请识别代码中的问题和风险' },
         { title: '💡 改进方案', prompt: '请提供代码改进和重构方案' },
         { title: '📝 最佳实践', prompt: '请给出编码规范和最佳实践' }
@@ -727,114 +777,88 @@ const generateGenericSplitTasks = (message) => {
   ]
 }
 
-/** 处理复杂问题（分步执行） */
+/** 处理复杂问题 — 委托给后端 AgentOrchestrator 编排器 */
 const handleComplexQuestion = async (message) => {
-  // 显示用户消息
   chatMessages.value.push({ role: 'user', content: message })
   saveChatHistory()
   aiInput.value = ''
   aiLoading.value = true
-  
+
+  // 先显示"编排中"提示
+  chatMessages.value.push({
+    role: 'assistant',
+    content: '🧠 正在分析意图，规划编排流水线...'
+  })
+  scrollToBottom()
+
   try {
-    // 智能切分问题（先尝试 AI 规划，失败则本地切分）
-    chatMessages.value.push({
-      role: 'assistant',
-      content: '🧠 正在分析您的问题，规划分析步骤...'
-    })
-    scrollToBottom()
-    
-    const tasks = await splitComplexQuestion(message)
-    
-    // 更新规划消息
-    chatMessages.value.pop()
-    chatMessages.value.push({
-      role: 'assistant',
-      content: `⏳ 已规划 ${tasks.length} 个分析步骤，开始逐步执行...\n\n${tasks.map((t, i) => `  ${i + 1}. ${t.title}`).join('\n')}`
-    })
-    saveChatHistory()
-    scrollToBottom()
-    
-    // 逐步执行任务
-    const results = []
-    for (let i = 0; i < tasks.length; i++) {
-      const task = tasks[i]
-      
-      // 显示当前步骤
-      chatMessages.value.push({
-        role: 'assistant',
-        content: `${task.title}（${i + 1}/${tasks.length}）\n\n⏳ 正在分析中...`
-      })
-      scrollToBottom()
-      
-      try {
-        // 构建请求（包含项目路径和原始问题背景）
-        const pathContext = projectRoot.value ? `项目路径：${projectRoot.value}\n\n` : ''
-        const fullPrompt = `${pathContext}原始问题：${message}\n\n当前任务：${task.prompt}`
-        
-        const response = await aiChat.chat(fullPrompt, null)
-        const reply = response.reply || response.message || response.result || '收到回复'
-        
-        // 更新消息
-        chatMessages.value.pop()
-        chatMessages.value.push({
-          role: 'assistant',
-          content: `${task.title}（${i + 1}/${tasks.length}）\n\n${reply}`
-        })
-        results.push(reply)
-        saveChatHistory()
-        scrollToBottom()
-        
-        // 步骤间短暂延迟
-        if (i < tasks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
-      } catch (error) {
-        chatMessages.value.pop()
-        chatMessages.value.push({
-          role: 'assistant',
-          content: `${task.title}（${i + 1}/${tasks.length}）\n\n❌ 此步骤分析失败：${error.response?.data?.reply || error.message}`
-        })
-        results.push(`[此步骤失败]`)
-        saveChatHistory()
-        scrollToBottom()
+    // 构建 codeContext：优先传代码内容，否则传项目路径+文件树摘要
+    let codeContext = codeContent.value?.trim() ? codeContent.value.substring(0, 8000) : null
+    if (!codeContext && projectRoot.value) {
+      codeContext = `【项目工作区路径】: ${projectRoot.value}`
+      if (projectTreeSummary.value) {
+        codeContext += `\n\n【项目文件结构摘要】:\n${projectTreeSummary.value}`
       }
     }
-    
-    // 最后请求 AI 做汇总
-    chatMessages.value.push({
-      role: 'assistant',
-      content: '📊 正在生成汇总报告...'
-    })
-    scrollToBottom()
-    
-    try {
-      const summaryPrompt = `请根据以下分步分析结果，生成一份简洁的汇总报告。\n\n原始问题：${message}\n\n各步骤分析结果：\n${results.map((r, i) => `【${tasks[i].title}】\n${r}`).join('\n\n')}\n\n请用简洁的语言总结关键发现和整体建议。`
-      const summaryResp = await aiChat.chat(summaryPrompt, null)
-      const summary = summaryResp.reply || summaryResp.message || summaryResp.result || ''
-      
-      chatMessages.value.pop()
+
+    const res = await aiProgramming.orchestrate(message, codeContext, 'web-user')
+
+    // 移除"编排中"提示
+    chatMessages.value.pop()
+
+    if (res.success) {
+      // 显示意图和流水线概览
+      const pipelineOverview = res.pipeline
+        ? res.pipeline.map((s, i) => `  ${i + 1}. ${s}`).join('\n')
+        : ''
       chatMessages.value.push({
         role: 'assistant',
-        content: `✅ **分析完成 — 汇总报告**\n\n${summary}\n\n---\n📋 共完成 ${tasks.length} 个步骤的分析，详细结果见上方各步骤。`
+        content: `${res.intentLabel || '🤖 智能编排'}\n\n⚙️ 执行流水线：\n${pipelineOverview}\n\n⏱️ 总耗时：${((res.totalDurationMs || 0) / 1000).toFixed(1)}s`
       })
-    } catch {
-      // 汇总失败时给出简单完成提示
-      chatMessages.value.pop()
+      saveChatHistory()
+      scrollToBottom()
+
+      // 逐步展示各步骤结果
+      if (res.steps && res.steps.length > 0) {
+        for (const step of res.steps) {
+          const statusIcon = step.success ? '✅' : '⚠️'
+          const durationStr = step.durationMs ? ` (${(step.durationMs / 1000).toFixed(1)}s)` : ''
+          chatMessages.value.push({
+            role: 'assistant',
+            content: `${statusIcon} 步骤 ${step.stepNumber}：${step.stepName}${durationStr}\n\n${step.result || step.error || '（无输出）'}`
+          })
+          saveChatHistory()
+          scrollToBottom()
+        }
+      }
+
+      // 最终汇总
       chatMessages.value.push({
         role: 'assistant',
-        content: `✅ 分析完成！共完成 ${tasks.length} 个步骤的分析，请查看上方的详细结果。`
+        content: `📋 **编排完成 — 最终结果**\n\n${res.finalResult || '所有步骤已执行完毕，请查看上方各步骤详细结果。'}`
+      })
+    } else {
+      chatMessages.value.push({
+        role: 'assistant',
+        content: `⚠️ 编排执行失败：${res.error || '未知错误'}`
       })
     }
     saveChatHistory()
     scrollToBottom()
-    
+
   } catch (error) {
-    ElMessage.error('分析失败: ' + error.message)
+    chatMessages.value.pop()  // 移除"编排中"提示
+    const errMsg = error.response?.data?.error
+      || error.response?.data?.reply
+      || error.response?.data?.message
+      || error.message
+    ElMessage.error('编排失败: ' + errMsg)
     chatMessages.value.push({
       role: 'assistant',
-      content: '❌ 分析时发生错误：' + (error.response?.data?.reply || error.message)
+      content: '❌ 编排请求失败：' + errMsg
     })
     saveChatHistory()
+    scrollToBottom()
   } finally {
     aiLoading.value = false
   }
@@ -853,21 +877,24 @@ const quickAction = async (type) => {
     return
   }
   
-  // 构造复杂问题消息
+  // 构造复杂问题消息，注入项目路径和文件树摘要
+  const projectInfo = `\n\n【项目工作区路径】: ${projectRoot.value}`
+  const treeInfo = projectTreeSummary.value ? `\n\n【项目文件结构摘要】:\n${projectTreeSummary.value}` : ''
+  
   let message
   if (type === 'logic') {
     message = `请全面分析并解析当前项目的业务逻辑，包括：
 1. 项目结构和技术栈
 2. 核心业务流程
 3. 数据流向
-4. 各模块之间的协作关系`
+4. 各模块之间的协作关系${projectInfo}${treeInfo}`
   } else if (type === 'arch') {
     message = `请全面分析并解析当前项目的业务架构，包括：
 1. 系统分层设计
 2. 技术选型
 3. 模块划分
 4. 服务间通信方式
-5. 整体架构的优缺点`
+5. 整体架构的优缺点${projectInfo}${treeInfo}`
   }
   
   // 使用通用复杂问题处理机制
