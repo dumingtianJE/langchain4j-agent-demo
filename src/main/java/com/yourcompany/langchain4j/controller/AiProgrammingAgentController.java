@@ -79,20 +79,27 @@ public class AiProgrammingAgentController {
         }
         
         if (result.isSuccess()) {
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "intent", result.getIntent(),
-                    "intentLabel", result.getIntentLabel(),
-                    "pipeline", result.getPipeline(),
-                    "steps", result.getSteps(),
-                    "finalResult", result.getFinalResult() != null ? result.getFinalResult() : "",
-                    "totalDurationMs", result.getTotalDurationMs()
-            ));
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", true);
+            response.put("intent", result.getIntent());
+            response.put("intentLabel", result.getIntentLabel());
+            response.put("confidence", result.getConfidence());
+            response.put("pipeline", result.getPipeline());
+            response.put("steps", result.getSteps());
+            response.put("finalResult", result.getFinalResult() != null ? result.getFinalResult() : "");
+            response.put("qualityScore", result.getQualityScore());
+            response.put("fixRounds", result.getFixRounds());
+            response.put("totalDurationMs", result.getTotalDurationMs());
+            return ResponseEntity.ok(response);
         } else {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "error", result.getErrorMessage() != null ? result.getErrorMessage() : "编排执行失败"
-            ));
+            Map<String, Object> errorResponse = new java.util.HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", result.getErrorMessage() != null ? result.getErrorMessage() : "编排执行失败");
+            errorResponse.put("intent", result.getIntent());
+            errorResponse.put("intentLabel", result.getIntentLabel());
+            errorResponse.put("steps", result.getSteps());
+            errorResponse.put("totalDurationMs", result.getTotalDurationMs());
+            return ResponseEntity.ok(errorResponse);
         }
     }
     

@@ -1,0 +1,80 @@
+﻿
+2026-06-04 02:52:40 [main] INFO  o.s.s.c.a.a.c.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer - Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager
+2026-06-04 02:52:41 [main] INFO  o.s.b.a.e.web.EndpointLinksResolver - Exposing 4 endpoints beneath base path '/actuator'
+2026-06-04 02:52:43 [main] INFO  o.s.b.a.h.H2ConsoleAutoConfiguration - H2 console available at '/h2-console'. Database available at 'jdbc:h2:file:/app/data/ai-agent-db'
+2026-06-04 02:52:43 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path '/'
+2026-06-04 02:52:43 [main] INFO  c.y.l.LangChain4jAgentDemoApplication - Started LangChain4jAgentDemoApplication in 53.07 seconds (process running for 55.674)
+2026-06-04 02:52:44 [http-nio-8080-exec-1] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-06-04 02:52:44 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2026-06-04 02:52:44 [http-nio-8080-exec-1] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 3 ms
+2026-06-04 02:52:49 [http-nio-8080-exec-3] INFO  c.y.l.c.AiProgrammingAgentController - 鏀跺埌缂栨帓璇锋眰: message闀垮害=32, hasCodeContext=false
+2026-06-04 02:52:49 [http-nio-8080-exec-3] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鏀跺埌缂栨帓璇锋眰锛屾秷鎭暱搴? 32
+2026-06-04 02:52:49 [http-nio-8080-exec-3] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎰忓浘: code_generation (馃捇 浠ｇ爜鐢熸垚涓庡鏌?锛岀疆淇″害: 0.90
+2026-06-04 02:52:49 [http-nio-8080-exec-3] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎵ц姝ラ 1/2: 浠ｇ爜鐢熸垚
+2026-06-04 02:53:33 [http-nio-8080-exec-3] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 姝ラ 浠ｇ爜鐢熸垚 瀹屾垚锛岃€楁椂=43762ms
+2026-06-04 02:53:33 [http-nio-8080-exec-3] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎵ц姝ラ 2/2: 浠ｇ爜瀹℃煡
+2026-06-04 02:53:59 [http-nio-8080-exec-3] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 姝ラ 浠ｇ爜瀹℃煡 瀹屾垚锛岃€楁椂=26439ms
+2026-06-04 02:53:59 [http-nio-8080-exec-3] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 璐ㄩ噺闂ㄧ绗?0 杞紝璇勫垎: 80锛岃€楁椂: 4ms
+2026-06-04 02:53:59 [http-nio-8080-exec-3] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 缂栨帓瀹屾垚锛屾剰鍥?code_generation锛屾楠ゆ暟=3锛岃川閲忓垎=80锛屼慨姝ｈ疆娆?0锛屾€昏€楁椂=70213ms
+2026-06-04 02:54:00 [http-nio-8080-exec-10] INFO  c.y.l.c.AiProgrammingAgentController - 鏀跺埌缂栨帓璇锋眰: message闀垮害=32, hasCodeContext=false
+2026-06-04 02:54:00 [http-nio-8080-exec-10] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鏀跺埌缂栨帓璇锋眰锛屾秷鎭暱搴? 32
+2026-06-04 02:54:00 [http-nio-8080-exec-10] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎰忓浘: code_generation (馃捇 浠ｇ爜鐢熸垚涓庡鏌?锛岀疆淇″害: 0.90
+2026-06-04 02:54:00 [http-nio-8080-exec-10] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎵ц姝ラ 1/2: 浠ｇ爜鐢熸垚
+2026-06-04 02:54:39 [http-nio-8080-exec-10] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 姝ラ 浠ｇ爜鐢熸垚 瀹屾垚锛岃€楁椂=38997ms
+2026-06-04 02:54:39 [http-nio-8080-exec-10] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎵ц姝ラ 2/2: 浠ｇ爜瀹℃煡
+2026-06-04 02:54:58 [http-nio-8080-exec-10] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 姝ラ 浠ｇ爜瀹℃煡 瀹屾垚锛岃€楁椂=19792ms
+2026-06-04 02:54:58 [http-nio-8080-exec-10] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 璐ㄩ噺闂ㄧ绗?0 杞紝璇勫垎: 80锛岃€楁椂: 1ms
+2026-06-04 02:54:58 [http-nio-8080-exec-10] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 缂栨帓瀹屾垚锛屾剰鍥?code_generation锛屾楠ゆ暟=3锛岃川閲忓垎=80锛屼慨姝ｈ疆娆?0锛屾€昏€楁椂=58794ms
+2026-06-04 02:54:59 [http-nio-8080-exec-8] INFO  c.y.l.c.AiProgrammingAgentController - 鏀跺埌缂栨帓璇锋眰: message闀垮害=24, hasCodeContext=false
+2026-06-04 02:54:59 [http-nio-8080-exec-8] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鏀跺埌缂栨帓璇锋眰锛屾秷鎭暱搴? 24
+2026-06-04 02:54:59 [http-nio-8080-exec-8] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎰忓浘: code_generation (馃捇 浠ｇ爜鐢熸垚涓庡鏌?锛岀疆淇″害: 0.90
+2026-06-04 02:54:59 [http-nio-8080-exec-8] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎵ц姝ラ 1/2: 浠ｇ爜鐢熸垚
+2026-06-04 02:55:22 [http-nio-8080-exec-9] INFO  c.y.l.service.CodeFileService - 宸插姞杞介」鐩洰褰? /app/workspace/langchain4j-agent-demo
+2026-06-04 02:55:26 [http-nio-8080-exec-3] INFO  c.y.l.service.CodeFileService - 宸插姞杞介」鐩洰褰? /app/workspace/langchain4j-agent-demo
+2026-06-04 02:56:55 [http-nio-8080-exec-1] INFO  c.y.l.c.AiProgrammingAgentController - 鏀跺埌缂栨帓璇锋眰: message闀垮害=69, hasCodeContext=true
+2026-06-04 02:56:55 [http-nio-8080-exec-1] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鏀跺埌缂栨帓璇锋眰锛屾秷鎭暱搴? 69
+2026-06-04 02:56:55 [http-nio-8080-exec-1] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎰忓浘: code_review (馃攳 浠ｇ爜瀹℃煡)锛岀疆淇″害: 0.40
+2026-06-04 02:56:55 [http-nio-8080-exec-1] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎵ц姝ラ 1/1: 浠ｇ爜瀹℃煡
+2026-06-04 02:56:59 [http-nio-8080-exec-8] ERROR c.y.l.agent.AgentOrchestrator - [Orchestrator] 姝ラ 浠ｇ爜鐢熸垚 瓒呮椂 (119993ms)
+2026-06-04 02:56:59 [http-nio-8080-exec-8] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 鎵ц姝ラ 2/2: 浠ｇ爜瀹℃煡
+2026-06-04 02:58:36 [reactor-http-epoll-3] WARN  r.n.http.client.HttpClientConnect - [1ee78867-1, L:/172.18.0.6:49738 ! R:dashscope.aliyuncs.com/8.152.159.24:443] The connection observed an error
+reactor.netty.http.client.PrematureCloseException: Connection prematurely closed BEFORE response
+2026-06-04 02:58:36 [pool-10-thread-1] WARN  dev.langchain4j.internal.RetryUtils - A retriable exception occurred. Remaining retries: 3 of 3
+org.springframework.web.client.ResourceAccessException: I/O error on POST request for "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions": Connection prematurely closed BEFORE response
+	at org.springframework.web.client.DefaultRestClient$DefaultRequestBodyUriSpec.createResourceAccessException(DefaultRestClient.java:692)
+	at org.springframework.web.client.DefaultRestClient$DefaultRequestBodyUriSpec.exchangeInternal(DefaultRestClient.java:577)
+	at org.springframework.web.client.DefaultRestClient$DefaultRequestBodyUriSpec.exchange(DefaultRestClient.java:535)
+	at org.springframework.web.client.RestClient$RequestHeadersSpec.exchange(RestClient.java:677)
+	at org.springframework.web.client.DefaultRestClient$DefaultResponseSpec.executeAndExtract(DefaultRestClient.java:809)
+	at org.springframework.web.client.DefaultRestClient$DefaultResponseSpec.toEntityInternal(DefaultRestClient.java:769)
+	at org.springframework.web.client.DefaultRestClient$DefaultResponseSpec.toEntity(DefaultRestClient.java:758)
+	at dev.langchain4j.http.client.spring.restclient.SpringRestClient.execute(SpringRestClient.java:77)
+	at dev.langchain4j.model.openai.internal.SyncRequestExecutor.execute(SyncRequestExecutor.java:20)
+	at dev.langchain4j.model.openai.internal.RequestExecutor.executeRaw(RequestExecutor.java:44)
+	at dev.langchain4j.model.openai.OpenAiChatModel.lambda$doChat$0(OpenAiChatModel.java:159)
+	at dev.langchain4j.internal.ExceptionMapper.withExceptionMapper(ExceptionMapper.java:29)
+	at dev.langchain4j.internal.RetryUtils.lambda$withRetryMappingExceptions$1(RetryUtils.java:326)
+	at dev.langchain4j.internal.RetryUtils$RetryPolicy.withRetry(RetryUtils.java:204)
+	at dev.langchain4j.internal.RetryUtils.withRetry(RetryUtils.java:263)
+	at dev.langchain4j.internal.RetryUtils.withRetryMappingExceptions(RetryUtils.java:326)
+	at dev.langchain4j.internal.RetryUtils.withRetryMappingExceptions(RetryUtils.java:309)
+	at dev.langchain4j.model.openai.OpenAiChatModel.doChat(OpenAiChatModel.java:158)
+	at dev.langchain4j.model.chat.ChatModel.chat(ChatModel.java:61)
+	at dev.langchain4j.model.chat.ChatModel.chat(ChatModel.java:36)
+	at dev.langchain4j.guardrail.SynchronousChatExecutor.execute(SynchronousChatExecutor.java:32)
+	at dev.langchain4j.guardrail.AbstractChatExecutor.executeInternal(AbstractChatExecutor.java:66)
+	at dev.langchain4j.guardrail.AbstractChatExecutor.execute(AbstractChatExecutor.java:52)
+	at dev.langchain4j.service.DefaultAiServices$1.invoke(DefaultAiServices.java:309)
+	at dev.langchain4j.service.DefaultAiServices$1.invoke(DefaultAiServices.java:154)
+	at jdk.proxy2/jdk.proxy2.$Proxy163.reviewCode(Unknown Source)
+	at com.yourcompany.langchain4j.agent.AgentOrchestrator.routeToSubAgent(AgentOrchestrator.java:587)
+	at com.yourcompany.langchain4j.agent.AgentOrchestrator.lambda$executeWithTimeout$1(AgentOrchestrator.java:367)
+	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(Unknown Source)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
+	at java.base/java.lang.Thread.run(Unknown Source)
+Caused by: reactor.netty.http.client.PrematureCloseException: Connection prematurely closed BEFORE response
+2026-06-04 02:58:55 [http-nio-8080-exec-8] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 姝ラ 浠ｇ爜瀹℃煡 瀹屾垚锛岃€楁椂=116010ms
+2026-06-04 02:58:55 [http-nio-8080-exec-8] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 缂栨帓瀹屾垚锛屾剰鍥?code_generation锛屾楠ゆ暟=2锛岃川閲忓垎=-1锛屼慨姝ｈ疆娆?0锛屾€昏€楁椂=236007ms
+2026-06-04 02:58:55 [http-nio-8080-exec-1] ERROR c.y.l.agent.AgentOrchestrator - [Orchestrator] 姝ラ 浠ｇ爜瀹℃煡 瓒呮椂 (119993ms)
+2026-06-04 02:58:55 [http-nio-8080-exec-1] INFO  c.y.l.agent.AgentOrchestrator - [Orchestrator] 缂栨帓瀹屾垚锛屾剰鍥?code_review锛屾楠ゆ暟=1锛岃川閲忓垎=-1锛屼慨姝ｈ疆娆?0锛屾€昏€楁椂=119998ms

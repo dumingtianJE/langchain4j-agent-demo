@@ -838,9 +838,17 @@ const handleComplexQuestion = async (message) => {
         content: `📋 **编排完成 — 最终结果**\n\n${res.finalResult || '所有步骤已执行完毕，请查看上方各步骤详细结果。'}`
       })
     } else {
+      // 展示各步骤的失败详情
+      const stepDetails = res.steps && res.steps.length > 0
+        ? res.steps.map(s => {
+            const icon = s.success ? '✅' : '❌'
+            const info = s.error || '无输出'
+            return `${icon} ${s.stepName}: ${info}`
+          }).join('\n')
+        : ''
       chatMessages.value.push({
         role: 'assistant',
-        content: `⚠️ 编排执行失败：${res.error || '未知错误'}`
+        content: `⚠️ **编排执行失败**\n\n意图：${res.intentLabel || '未知'}\n\n各步骤状态：\n${stepDetails}\n\n错误：${res.error || '未知错误'}\n\n💡 建议：AI 服务响应可能超时，请稍后重试或简化您的请求。`
       })
     }
     saveChatHistory()
@@ -848,15 +856,28 @@ const handleComplexQuestion = async (message) => {
 
   } catch (error) {
     chatMessages.value.pop()  // 移除"编排中"提示
-    const errMsg = error.response?.data?.error
-      || error.response?.data?.reply
-      || error.response?.data?.message
-      || error.message
-    ElMessage.error('编排失败: ' + errMsg)
-    chatMessages.value.push({
-      role: 'assistant',
-      content: '❌ 编排请求失败：' + errMsg
-    })
+    const errData = error.response?.data
+    const errMsg = errData?.error || errData?.reply || errData?.message || error.message
+    
+    // 如果有步骤信息，展示各步骤状态
+    if (errData?.steps && errData.steps.length > 0) {
+      const stepDetails = errData.steps.map(s => {
+        const icon = s.success ? '✅' : '❌'
+        const info = s.error || s.result?.substring(0, 100) || '无输出'
+        return `${icon} ${s.stepName}: ${info}`
+      }).join('\n')
+      ElMessage.error('编排失败: ' + (errMsg || '未知错误'))
+      chatMessages.value.push({
+        role: 'assistant',
+        content: `❌ **编排请求失败**\n\n意图：${errData.intentLabel || '未知'}\n\n各步骤状态：\n${stepDetails}\n\n错误详情：${errMsg || '未知错误'}\n\n💡 建议：可能是 AI 服务响应超时或网络连接不稳定，请稍后重试。`
+      })
+    } else {
+      ElMessage.error('编排失败: ' + errMsg)
+      chatMessages.value.push({
+        role: 'assistant',
+        content: '❌ 编排请求失败：' + errMsg + '\n\n💡 建议：可能是 AI 服务响应超时或网络连接不稳定，请稍后重试。'
+      })
+    }
     saveChatHistory()
     scrollToBottom()
   } finally {
