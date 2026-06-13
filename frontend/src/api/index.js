@@ -80,6 +80,18 @@ export const aiChat = {
   getProjectContext: () =>
     api.get('/ai/project-context'),
 
+  // 构建项目上下文缓存（加载项目后调用，后续编程请求不再重复分析）
+  buildProjectSummary: (projectPath) =>
+    api.post('/ai/project-summary/build', projectPath ? { projectPath } : {}, { timeout: 60000 }),
+
+  // 获取缓存状态
+  getProjectSummaryStatus: () =>
+    api.get('/ai/project-summary/status'),
+
+  // 强制刷新项目上下文缓存
+  refreshProjectSummary: () =>
+    api.post('/ai/project-summary/refresh', {}, { timeout: 60000 }),
+
   // 健康检查
   health: () => api.get('/ai/health')
 }

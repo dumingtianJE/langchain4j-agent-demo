@@ -253,6 +253,80 @@ public class SelfLearningManager {
     }
     
     /**
+     * 构建学习上下文（注入 Agent Prompt 的闭环反馈）
+     * 根据用户查询关键词，提取相关的改进模式和历史经验教训，
+     * 以精简的格式供 Agent 参考，避免重复犯同样的错误。
+     *
+     * @param query 用户当前查询
+     * @param maxPatterns 最多返回的改进模式数
+     * @return 学习上下文摘要，如果没有相关经验则返回 null
+     */
+    public String buildLearningContext(String query, int maxPatterns) {
+        if (query == null || query.isBlank()) return null;
+        
+        // 从查询中提取关键词（简单分词：按空格和标点分割，过滤短词）
+        String[] words = query.toLowerCase().split("[\\s,;.!?，；。！？]+");
+        Set<String> keywords = new HashSet<>();
+        for (String word : words) {
+            if (word.length() >= 2) keywords.add(word);
+        }
+        if (keywords.isEmpty()) return null;
+        
+        // 匹配相关改进模式
+        List<String> relevantPatterns = new ArrayList<>();
+        for (String pattern : improvementPatterns) {
+            String lower = pattern.toLowerCase();
+            for (String kw : keywords) {
+                if (lower.contains(kw)) {
+                    relevantPatterns.add(pattern);
+                    break;
+                }
+            }
+            if (relevantPatterns.size() >= maxPatterns) break;
+        }
+        
+        // 匹配相关负面经验（避免重蹈覆辙）
+        List<String> warnings = new ArrayList<>();
+        for (LearningExperience exp : experienceStore.values()) {
+            if (exp.getFeedbackScore() != null && exp.getFeedbackScore() <= 2) {
+                String q = exp.getQuery() != null ? exp.getQuery().toLowerCase() : "";
+                for (String kw : keywords) {
+                    if (q.contains(kw)) {
+                        String warning = String.format("避免: %s (用户反馈: %s)",
+                                exp.getQuery() != null ? truncate(exp.getQuery(), 80) : "",
+                                exp.getUserFeedback() != null ? truncate(exp.getUserFeedback(), 80) : "");
+                        warnings.add(warning);
+                        break;
+                    }
+                }
+                if (warnings.size() >= 3) break;
+            }
+        }
+        
+        if (relevantPatterns.isEmpty() && warnings.isEmpty()) return null;
+        
+        StringBuilder sb = new StringBuilder("【历史学习经验（供参考）】\n");
+        if (!relevantPatterns.isEmpty()) {
+            for (String p : relevantPatterns) {
+                sb.append("  • ").append(p).append("\n");
+            }
+        }
+        if (!warnings.isEmpty()) {
+            sb.append("⚠️ 历史教训:\n");
+            for (String w : warnings) {
+                sb.append("  • ").append(w).append("\n");
+            }
+        }
+        
+        return sb.toString();
+    }
+    
+    private String truncate(String text, int maxLen) {
+        if (text == null) return "";
+        return text.length() > maxLen ? text.substring(0, maxLen) + "..." : text;
+    }
+    
+    /**
      * 生成学习报告
      */
     public Map<String, Object> generateLearningReport() {

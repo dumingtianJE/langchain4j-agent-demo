@@ -21,9 +21,9 @@
         </div>
       </template>
       
-      <el-row :gutter="20" style="height: calc(100vh - 200px);">
+      <div class="panels-container" ref="panelsContainer">
         <!-- 文件树 -->
-        <el-col :span="5">
+        <div class="panel file-tree-panel" :style="{ width: panelWidths.left + 'px' }">
           <el-card class="file-tree-card" v-loading="treeLoading">
             <template #header>
               <div class="tree-header">
@@ -47,10 +47,17 @@
             />
             <el-empty v-else description="点击「加载项目」打开目录" :image-size="60" />
           </el-card>
-        </el-col>
+        </div>
+        
+        <!-- 拖拽分隔线 -->
+        <div class="panel-divider" @mousedown="startDrag($event, 'left')">
+          <div class="divider-line"></div>
+          <div class="divider-handle"></div>
+          <div class="divider-line"></div>
+        </div>
         
         <!-- 代码编辑区 -->
-        <el-col :span="14">
+        <div class="panel code-editor-panel" :style="{ width: panelWidths.center + 'px' }">
           <el-card class="code-editor-card">
             <div class="editor-info">
               <span>当前文件: {{ currentFile || '未选择' }}</span>
@@ -59,16 +66,23 @@
             <el-input
               v-model="codeContent"
               type="textarea"
-              :rows="30"
+              :autosize="{ minRows: 20 }"
               placeholder="在此编辑代码..."
               class="code-textarea"
               @input="markModified"
             />
           </el-card>
-        </el-col>
+        </div>
+        
+        <!-- 拖拽分隔线 -->
+        <div class="panel-divider" @mousedown="startDrag($event, 'right')">
+          <div class="divider-line"></div>
+          <div class="divider-handle"></div>
+          <div class="divider-line"></div>
+        </div>
         
         <!-- AI 对话区 -->
-        <el-col :span="5">
+        <div class="panel ai-chat-panel" :style="{ width: panelWidths.right + 'px' }">
           <el-card class="ai-chat-card">
             <template #header>
               <div class="chat-header">
@@ -94,6 +108,29 @@
                 <el-icon><MagicStick /></el-icon>
                 解析该项目业务架构
               </div>
+            </div>
+            <!-- 项目上下文缓存状态 -->
+            <div class="cache-status-bar" v-if="projectRoot">
+              <div class="cache-info">
+                <el-icon :style="{ color: cacheStatus.cached ? '#67c23a' : '#909399' }">
+                  <component :is="cacheStatus.cached ? 'CircleCheck' : 'Loading'" />
+                </el-icon>
+                <span class="cache-label">
+                  {{ cacheStatus.cached ? '项目上下文已缓存' : '未缓存' }}
+                </span>
+                <el-tag v-if="cacheStatus.cached" size="small" type="success" effect="plain">
+                  剩余{{ cacheStatus.remainingMinutes || 0 }}min
+                </el-tag>
+              </div>
+              <el-button 
+                size="small" 
+                text 
+                :loading="refreshingCache"
+                @click="refreshContextCache"
+                title="刷新项目上下文缓存"
+              >
+                <el-icon><Refresh /></el-icon>
+              </el-button>
             </div>
             <div class="chat-messages" ref="chatMessagesRef">
               <div 
@@ -123,8 +160,8 @@
               </el-button>
             </div>
           </el-card>
-        </el-col>
-      </el-row>
+        </div>
+      </div>
     </el-card>
     
     <!-- 加载项目对话框 -->
@@ -172,8 +209,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { FolderOpened, Download, MagicStick, Refresh, WarningFilled, Delete } from '@element-plus/icons-vue'
+import { ref, reactive, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { FolderOpened, Download, MagicStick, Refresh, WarningFilled, Delete, CircleCheck, Loading } from '@element-plus/icons-vue'
 import { codeFile, aiChat, aiProgramming } from '../api'
 import { ElMessage } from 'element-plus'
 
@@ -229,6 +266,10 @@ const aiLoading = ref(false)
 const chatMessages = ref([])
 const chatMessagesRef = ref(null)
 
+// 项目上下文缓存状态
+const cacheStatus = ref({ cached: false, remainingMinutes: 0 })
+const refreshingCache = ref(false)
+
 // 项目上下文缓存（用于 AI 分析时自动注入）
 const projectTreeSummary = ref('')
 const projectRootPath = ref('')
@@ -238,6 +279,76 @@ const projectRoot = ref('')
 const workspaceRoot = ref('')
 const treeLoading = ref(false)
 
+// ==================== 可拖拽分栏布局 ====================
+const panelsContainer = ref(null)
+const panelWidths = reactive({ left: 260, center: 700, right: 300 })
+const MIN_PANEL_WIDTH = 180
+const DIVIDER_WIDTH = 6  // 分隔线宽度 (px)
+
+let dragState = null  // { side, startX, startWidths }
+
+const startDrag = (e, side) => {
+  e.preventDefault()
+  dragState = {
+    side,
+    startX: e.clientX,
+    startWidths: { ...panelWidths }
+  }
+  document.addEventListener('mousemove', onDrag)
+  document.addEventListener('mouseup', stopDrag)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+}
+
+const onDrag = (e) => {
+  if (!dragState) return
+  const dx = e.clientX - dragState.startX
+  const { startWidths, side } = dragState
+
+  if (side === 'left') {
+    // 拖动左侧分隔线：调整 left 和 center
+    const newLeft = Math.max(MIN_PANEL_WIDTH, startWidths.left + dx)
+    const delta = newLeft - startWidths.left
+    const newCenter = startWidths.center - delta
+    if (newCenter >= MIN_PANEL_WIDTH) {
+      panelWidths.left = newLeft
+      panelWidths.center = newCenter
+    }
+  } else {
+    // 拖动右侧分隔线：调整 center 和 right
+    const newCenter = Math.max(MIN_PANEL_WIDTH, startWidths.center + dx)
+    const delta = newCenter - startWidths.center
+    const newRight = startWidths.right - delta
+    if (newRight >= MIN_PANEL_WIDTH) {
+      panelWidths.center = newCenter
+      panelWidths.right = newRight
+    }
+  }
+}
+
+const stopDrag = () => {
+  dragState = null
+  document.removeEventListener('mousemove', onDrag)
+  document.removeEventListener('mouseup', stopDrag)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
+/** 根据容器实际宽度初始化分栏比例 */
+const initPanelWidths = () => {
+  nextTick(() => {
+    const container = panelsContainer.value
+    if (!container) return
+    const totalW = container.clientWidth
+    const available = totalW - DIVIDER_WIDTH * 2  // 减去两条分隔线
+    if (available <= 0) return
+    // 默认比例：左 18% / 中 58% / 右 24%
+    panelWidths.left = Math.round(available * 0.18)
+    panelWidths.center = Math.round(available * 0.58)
+    panelWidths.right = available - panelWidths.left - panelWidths.center
+  })
+}
+
 const treeProps = {
   children: 'children',
   label: 'name'
@@ -245,6 +356,10 @@ const treeProps = {
 
 // ==================== 初始化：恢复会话 ====================
 onMounted(async () => {
+  // 初始化分栏布局
+  initPanelWidths()
+  window.addEventListener('resize', initPanelWidths)
+
   try {
     const res = await codeFile.getWorkspace()
     workspaceRoot.value = res.workspaceRoot || ''
@@ -274,6 +389,8 @@ onMounted(async () => {
       fileTree.value = treeNode ? [toTreeNode(treeNode)] : []
       projectRoot.value = data.projectRoot || data.root || savedRoot
       workspaceRoot.value = data.projectRoot || data.absolutePath || savedRoot
+      // 恢复会话时自动构建缓存
+      buildContextCache(projectRoot.value)
     } catch {
       // 项目路径可能已失效，忽略
     }
@@ -320,6 +437,11 @@ onMounted(async () => {
   loadProjectContext()
 })
 
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', initPanelWidths)
+  stopDrag()  // 清理拖拽事件
+})
+
 /** 从后端获取项目上下文摘要并缓存 */
 const loadProjectContext = async () => {
   try {
@@ -328,6 +450,8 @@ const loadProjectContext = async () => {
       projectRootPath.value = res.projectRoot || ''
       projectTreeSummary.value = res.treeSummary || ''
     }
+    // 同时查询缓存状态
+    await updateCacheStatus()
   } catch {
     // 项目上下文加载失败不影响其他功能
   }
@@ -410,6 +534,8 @@ const confirmLoadProject = async () => {
     loadDialogVisible.value = false
     saveSession()  // 持久化项目路径
     ElMessage.success(`项目已加载: ${data.absolutePath || path}`)
+    // 加载项目后自动构建上下文缓存（后续编程请求不再重复分析项目结构）
+    buildContextCache(projectRoot.value)
   } catch (error) {
     ElMessage.error('加载项目失败: ' + (error.response?.data?.error || error.message))
   } finally {
@@ -938,6 +1064,43 @@ const clearChat = () => {
   removeLS('chat-messages')
   ElMessage.success('对话记录已清除')
 }
+
+/** 构建项目上下文缓存（后台执行，不阻塞 UI） */
+const buildContextCache = async (projectPath) => {
+  try {
+    await aiChat.buildProjectSummary(projectPath)
+    // 构建成功后更新缓存状态
+    await updateCacheStatus()
+  } catch {
+    // 缓存构建失败不影响其他功能
+  }
+}
+
+/** 刷新项目上下文缓存 */
+const refreshContextCache = async () => {
+  refreshingCache.value = true
+  try {
+    await aiChat.refreshProjectSummary()
+    await updateCacheStatus()
+    ElMessage.success('项目上下文缓存已刷新')
+  } catch {
+    ElMessage.error('刷新缓存失败')
+  } finally {
+    refreshingCache.value = false
+  }
+}
+
+/** 更新缓存状态显示 */
+const updateCacheStatus = async () => {
+  try {
+    const res = await aiChat.getProjectSummaryStatus()
+    if (res.success && res.cacheStatus) {
+      cacheStatus.value = res.cacheStatus
+    }
+  } catch {
+    // 状态查询失败不影响功能
+  }
+}
 </script>
 
 <style scoped>
@@ -956,6 +1119,69 @@ const clearChat = () => {
 :deep(.el-card__header) {
   border-bottom: 1px solid var(--border-glow);
   background: rgba(5, 8, 17, 0.5);
+}
+
+/* ==================== 可拖拽分栏布局 ==================== */
+.panels-container {
+  display: flex;
+  align-items: stretch;
+  height: calc(100vh - 200px);
+  gap: 0;
+}
+
+.panel {
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.panel > :deep(.el-card) {
+  height: 100%;
+}
+
+.panel-divider {
+  width: 6px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  gap: 2px;
+  padding: 0 1px;
+  transition: background 0.2s ease;
+  z-index: 10;
+}
+
+.panel-divider:hover,
+.panel-divider:active {
+  background: rgba(0, 242, 254, 0.08);
+}
+
+.divider-line {
+  flex: 1;
+  width: 2px;
+  background: var(--border-glow);
+  border-radius: 1px;
+  transition: background 0.2s ease;
+}
+
+.divider-handle {
+  width: 6px;
+  height: 32px;
+  border-radius: 3px;
+  background: var(--border-glow);
+  transition: all 0.2s ease;
+}
+
+.panel-divider:hover .divider-line {
+  background: var(--neon-blue);
+  box-shadow: 0 0 6px rgba(0, 242, 254, 0.4);
+}
+
+.panel-divider:hover .divider-handle {
+  background: var(--neon-blue);
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+  height: 48px;
 }
 
 .card-header {
@@ -992,6 +1218,28 @@ const clearChat = () => {
   background: rgba(16, 22, 58, 0.4);
   border: 1px solid var(--border-glow);
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 代码编辑区 textarea 自适应高度 */
+.code-editor-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.code-editor-card :deep(.el-textarea) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-editor-card :deep(.el-textarea__inner) {
+  flex: 1 !important;
+  height: 100% !important;
+  resize: none;
 }
 
 .workspace-hint {
@@ -1160,6 +1408,28 @@ const clearChat = () => {
 .quick-action-card .el-icon {
   font-size: 16px;
   color: #c084fc;
+}
+
+.cache-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(5, 8, 17, 0.6);
+  border: 1px solid var(--border-glow);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.cache-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cache-label {
+  color: var(--text-secondary);
 }
 
 :deep(.el-textarea__inner)::-webkit-scrollbar,

@@ -129,9 +129,9 @@ public class AiProgrammingAgentController {
             record.setAgentName("AiProgrammingAgent");
             record.setUserId(request.getUserId());
             record.setRequestType("execute");
-            record.setInputTokens(request.getTask().length() / 4);
-            record.setOutputTokens(result.length() / 4);
-            record.setTotalTokens((request.getTask().length() + result.length()) / 4);
+            record.setInputTokens(AiSupervisor.estimateTokens(request.getTask()));
+            record.setOutputTokens(AiSupervisor.estimateTokens(result));
+            record.setTotalTokens(record.getInputTokens() + record.getOutputTokens());
             record.setDurationMs(duration);
             
             aiSupervisor.recordTokenUsage(record);

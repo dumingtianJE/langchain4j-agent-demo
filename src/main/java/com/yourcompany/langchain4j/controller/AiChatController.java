@@ -1,15 +1,11 @@
 package com.yourcompany.langchain4j.controller;
 
 import com.yourcompany.langchain4j.agent.AiProgrammingAgent;
+import com.yourcompany.langchain4j.agent.StreamingAiAgent;
 import com.yourcompany.langchain4j.security.PromptInjectionGuard;
 import com.yourcompany.langchain4j.service.CodeFileService;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.chat.response.ChatResponse;
-import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
+import com.yourcompany.langchain4j.service.ProjectContextCache;
+import dev.langchain4j.service.TokenStream;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +22,9 @@ import java.util.concurrent.Executors;
 /**
  * 统一 AI 聊天控制器
  * 提供同步 AI 对话接口和 SSE 流式输出接口
+ * 
+ * 优化（#9）：流式接口使用 StreamingAiAgent（AiServices 构建），
+ * 替代裸 StreamingChatModel，流式输出同时具备工具调用 + 上下文记忆能力
  */
 @Slf4j
 @RestController
@@ -34,9 +33,10 @@ import java.util.concurrent.Executors;
 public class AiChatController {
     
     private final AiProgrammingAgent aiProgrammingAgent;
-    private final StreamingChatModel streamingChatModel;
+    private final StreamingAiAgent streamingAiAgent;
     private final PromptInjectionGuard promptInjectionGuard;
     private final CodeFileService codeFileService;
+    private final ProjectContextCache projectContextCache;
     
     // 异步执行线程池（用于流式响应）
     private final ExecutorService sseExecutor = Executors.newCachedThreadPool();
@@ -73,10 +73,9 @@ public class AiChatController {
             
             if (request.getCodeContext() != null && !request.getCodeContext().isEmpty()) {
                 userContent = userContent + "\n\n相关代码:\n" + request.getCodeContext();
-                response = aiProgrammingAgent.answerTechnicalQuestion(userContent);
-            } else {
-                response = aiProgrammingAgent.answerTechnicalQuestion(userContent);
             }
+            
+            response = aiProgrammingAgent.answerTechnicalQuestion(userContent);
             
             return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -116,9 +115,11 @@ public class AiChatController {
      * SSE 流式 AI 对话接口
      * 支持逐 Token 推送，提升用户体验
      * 
-     * 前端使用示例：
-     * const eventSource = new EventSource('/api/ai/chat/stream?message=你的问题')
-     * eventSource.onmessage = (event) => console.log(event.data)
+     * 优化（#9）：使用 StreamingAiAgent（AiServices）替代裸 StreamingChatModel
+     * - 流式输出同时具备工具调用能力（文件读取、知识库检索）
+     * - 拥有 TokenWindowChatMemory 上下文记忆
+     * - 注入项目上下文摘要（缓存优先）
+     * - Prompt 注入防护 + 代码上下文拼接
      */
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestParam String message,
@@ -128,6 +129,26 @@ public class AiChatController {
         // 超时设置 5 分钟，支持复杂任务
         SseEmitter emitter = new SseEmitter(300_000L);
         
+        // Prompt 注入防护
+        String sanitized = promptInjectionGuard.sanitizeInput(message);
+        if (sanitized == null) {
+            sseExecutor.execute(() -> {
+                try {
+                    emitter.send(SseEmitter.event()
+                        .name("error")
+                        .data("{\"error\":\"检测到异常输入，请求被拒绝\"}"));
+                    emitter.complete();
+                } catch (Exception e) {
+                    emitter.completeWithError(e);
+                }
+            });
+            return emitter;
+        }
+        message = sanitized;
+        
+        // 构建消息内容（注入项目上下文 + 代码上下文）
+        final String userContent = buildStreamUserContent(message, codeContext);
+        
         sseExecutor.execute(() -> {
             try {
                 // 发送开始信号
@@ -135,55 +156,33 @@ public class AiChatController {
                     .name("start")
                     .data("{\"status\":\"thinking\",\"message\":\"AI 正在思考中...\"}"));
                 
-                // 构建消息列表
-                String userContent = message;
-                if (codeContext != null && !codeContext.isBlank()) {
-                    userContent = message + "\n\n相关代码:\n" + codeContext;
-                }
+                // 优化（#9）：使用 StreamingAiAgent 替代裸 StreamingChatModel
+                // AiServices 自动处理 SystemPrompt + ChatMemory + 工具调用
+                TokenStream tokenStream = streamingAiAgent.streamAnswerTechnicalQuestion(userContent);
                 
-                List<ChatMessage> messages = List.of(
-                    SystemMessage.from("你是一个专业的 AI 编程助手，请简洁、准确地回答用户的技术问题。"),
-                    UserMessage.from(userContent)
-                );
-                
-                StringBuilder fullResponse = new StringBuilder();
-                
-                // 流式调用 LLM
-                streamingChatModel.chat(messages, new StreamingChatResponseHandler() {
-                    @Override
-                    public void onPartialResponse(String partialResponse) {
+                tokenStream
+                    .onPartialResponse(partialResponse -> {
                         try {
-                            fullResponse.append(partialResponse);
                             emitter.send(SseEmitter.event()
                                 .name("token")
                                 .data(partialResponse));
                         } catch (Exception e) {
                             log.warn("发送 SSE Token 失败: {}", e.getMessage());
                         }
-                    }
-                    
-                    @Override
-                    public void onCompleteResponse(ChatResponse chatResponse) {
+                    })
+                    .onCompleteResponse(chatResponse -> {
                         try {
-                            AiMessage aiMessage = chatResponse.aiMessage();
-                            if (aiMessage != null && fullResponse.length() == 0) {
-                                emitter.send(SseEmitter.event()
-                                    .name("token")
-                                    .data(aiMessage.text()));
-                            }
                             emitter.send(SseEmitter.event()
                                 .name("done")
                                 .data("{\"status\":\"complete\"}"));
                             emitter.complete();
-                            log.info("SSE 流式对话完成");
+                            log.info("SSE 流式对话完成（AiServices + 工具调用）");
                         } catch (Exception e) {
                             log.warn("发送 SSE 完成信号失败: {}", e.getMessage());
                             emitter.complete();
                         }
-                    }
-                    
-                    @Override
-                    public void onError(Throwable error) {
+                    })
+                    .onError(error -> {
                         try {
                             log.error("SSE 流式对话错误", error);
                             emitter.send(SseEmitter.event()
@@ -193,8 +192,8 @@ public class AiChatController {
                             log.warn("发送 SSE 错误信号失败", e);
                         }
                         emitter.completeWithError(error);
-                    }
-                });
+                    })
+                    .start();
                 
             } catch (Exception e) {
                 log.error("SSE 流式对话处理失败", e);
@@ -297,11 +296,41 @@ public class AiChatController {
     }
     
     /**
-     * 检测消息是否涉及项目分析，自动注入工作区路径提示
-     * 触发关键词：分析/架构/业务/项目结构/代码结构/模块/技术栈/依赖
+     * 构建流式请求的用户内容（注入项目上下文 + 代码上下文）
+     */
+    private String buildStreamUserContent(String message, String codeContext) {
+        String userContent = message;
+
+        // 注入项目上下文摘要
+        String projectContext = buildProjectContextHint(message);
+        if (!projectContext.isEmpty()) {
+            userContent = projectContext + "\n\n" + userContent;
+            log.debug("SSE 接口已注入项目上下文提示");
+        }
+
+        // 拼接代码上下文
+        if (codeContext != null && !codeContext.isBlank()) {
+            userContent = userContent + "\n\n相关代码:\n" + codeContext;
+        }
+
+        return userContent;
+    }
+
+    /**
+     * 构建项目上下文摘要（优先使用缓存，避免每次请求都重新分析项目）
+     * 当用户发起编程相关请求时，自动注入已缓存的项目结构/依赖/规范摘要
      */
     private String buildProjectContextHint(String message) {
         if (message == null || message.isBlank()) return "";
+
+        // 1. 如果缓存有效，直接注入缓存摘要（最高优先级）
+        String cachedSummary = projectContextCache.getCachedSummary();
+        if (cachedSummary != null && !cachedSummary.isBlank()) {
+            log.debug("使用缓存的项目上下文摘要，长度: {} 字符", cachedSummary.length());
+            return cachedSummary;
+        }
+
+        // 2. 缓存无效时，对涉及项目分析类的请求注入工作区路径提示
         String lower = message.toLowerCase();
         boolean projectRelated = lower.contains("分析") || lower.contains("架构") 
                 || lower.contains("业务") || lower.contains("项目结构")
@@ -313,5 +342,68 @@ public class AiChatController {
         String projectRoot = codeFileService.getCurrentProjectRoot();
         return "【系统上下文】当前项目工作区路径为: " + projectRoot 
                 + "\n请使用工具主动读取和分析该项目，不要说无法访问项目。";
+    }
+
+    // ================================================================
+    // 项目上下文缓存管理接口
+    // ================================================================
+
+    /**
+     * 构建/刷新项目上下文缓存
+     * 前端加载项目时调用，后台分析项目结构并缓存摘要
+     */
+    @PostMapping("/project-summary/build")
+    public ResponseEntity<Map<String, Object>> buildProjectSummary(
+            @RequestBody(required = false) Map<String, String> body) {
+        String projectPath = (body != null) ? body.get("projectPath") : null;
+        log.info("收到项目摘要缓存构建请求，路径: {}", projectPath);
+
+        String summary = projectContextCache.buildAndCacheSummary(projectPath);
+        if (summary != null) {
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "项目上下文缓存构建成功",
+                "summaryLength", summary.length(),
+                "cacheStatus", projectContextCache.getCacheStatus()
+            ));
+        } else {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", "项目上下文缓存构建失败，请检查项目路径是否正确"
+            ));
+        }
+    }
+
+    /**
+     * 获取项目上下文缓存状态
+     */
+    @GetMapping("/project-summary/status")
+    public ResponseEntity<Map<String, Object>> getProjectSummaryStatus() {
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "cacheStatus", projectContextCache.getCacheStatus()
+        ));
+    }
+
+    /**
+     * 强制刷新项目上下文缓存
+     */
+    @PostMapping("/project-summary/refresh")
+    public ResponseEntity<Map<String, Object>> refreshProjectSummary() {
+        log.info("收到项目摘要缓存刷新请求");
+        String summary = projectContextCache.refreshCache();
+        if (summary != null) {
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "项目上下文缓存已刷新",
+                "summaryLength", summary.length(),
+                "cacheStatus", projectContextCache.getCacheStatus()
+            ));
+        } else {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", "刷新失败"
+            ));
+        }
     }
 }

@@ -20,6 +20,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class GitIntegrationTool {
     
+    /** 工具返回内容最大字符数 */
+    private static final int MAX_OUTPUT_LENGTH = 2000;
+    
     /**
      * 存储每个任务的分支信息
      */
@@ -29,6 +32,10 @@ public class GitIntegrationTool {
     public String createFeatureBranch(String taskId, String branchName, String description) {
         
         try {
+            // 输入校验：防止命令注入
+            branchName = sanitizeInput(branchName);
+            if (branchName == null) return "❌ 错误：分支名称包含非法字符";
+            
             // 1. 检查是否在Git仓库中
             if (!isGitRepository()) {
                 return "❌ 错误：当前目录不是Git仓库";
@@ -66,6 +73,10 @@ public class GitIntegrationTool {
     public String commitCode(String taskId, String commitMessage, String filePaths) {
         
         try {
+            // 输入校验：防止命令注入
+            commitMessage = sanitizeInput(commitMessage);
+            filePaths = sanitizeInput(filePaths);
+            if (commitMessage == null || filePaths == null) return "❌ 错误：输入包含非法字符";
             // 1. 获取分支信息
             BranchInfo branchInfo = taskBranches.get(taskId);
             if (branchInfo == null) {
@@ -133,6 +144,11 @@ public class GitIntegrationTool {
     public String createPullRequest(String taskId, String title, String description, String targetBranch) {
         
         try {
+            // 输入校验：防止命令注入
+            title = sanitizeInput(title);
+            description = sanitizeInput(description);
+            targetBranch = sanitizeInput(targetBranch);
+            if (title == null || description == null || targetBranch == null) return "❌ 错误：输入包含非法字符";
             BranchInfo branchInfo = taskBranches.get(taskId);
             if (branchInfo == null) {
                 return "❌ 错误：任务 " + taskId + " 没有关联的分支";
@@ -204,6 +220,9 @@ public class GitIntegrationTool {
     public String mergeBranch(String taskId, String targetBranch) {
         
         try {
+            // 输入校验：防止命令注入
+            targetBranch = sanitizeInput(targetBranch);
+            if (targetBranch == null) return "❌ 错误：目标分支名称包含非法字符";
             BranchInfo branchInfo = taskBranches.get(taskId);
             if (branchInfo == null) {
                 return "❌ 错误：任务 " + taskId + " 没有关联的分支";
@@ -306,24 +325,58 @@ public class GitIntegrationTool {
             Process process = pb.start();
             
             StringBuilder output = new StringBuilder();
-            StringBuilder error = new StringBuilder();
             
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     output.append(line).append("\n");
+                    // 限制输出长度，防止大输出占用过多 Token
+                    if (output.length() > MAX_OUTPUT_LENGTH + 200) {
+                        output.append("\n⚠️ 输出已截断（原始输出超过 ").append(MAX_OUTPUT_LENGTH).append(" 字符）");
+                        break;
+                    }
                 }
             }
             
             int exitCode = process.waitFor();
             
-            return new ProcessResult(exitCode, output.toString(), error.toString());
+            // 截断最终输出
+            String finalOutput = truncate(output.toString(), MAX_OUTPUT_LENGTH);
+            
+            return new ProcessResult(exitCode, finalOutput, "");
             
         } catch (Exception e) {
             log.error("执行命令失败: {}", command, e);
             return new ProcessResult(1, "", e.getMessage());
         }
+    }
+    
+    /**
+     * 校验用户输入，防止 Shell 命令注入
+     * 拒绝包含 ; | & > < $ ` \n \r 等危险字符的输入
+     * @return 校验后的输入，如果包含非法字符则返回 null
+     */
+    private String sanitizeInput(String input) {
+        if (input == null || input.isBlank()) return input;
+        // 检测 Shell 元字符和命令注入符号
+        if (input.matches(".*[;|&$`<>\\\\\\n\\r].*")) {
+            log.warn("检测到潜在命令注入: {}", input.substring(0, Math.min(input.length(), 50)));
+            return null;
+        }
+        // 拒绝长度异常的输入
+        if (input.length() > 500) return null;
+        return input.trim();
+    }
+    
+    /**
+     * 截断字符串到最大长度
+     */
+    private String truncate(String content, int maxLength) {
+        if (content == null || content.length() <= maxLength) return content;
+        int cutPoint = content.lastIndexOf('\n', maxLength);
+        if (cutPoint < maxLength / 2) cutPoint = maxLength;
+        return content.substring(0, cutPoint) + "\n⚠️ 已截断（原始 " + content.length() + " 字符）";
     }
     
     // ==================== 数据类 ====================

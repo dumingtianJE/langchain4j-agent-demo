@@ -13,27 +13,34 @@ import java.util.stream.Collectors;
 /**
  * 知识库检索工具
  * 供 Agent 调用以检索相关知识
+ * 
+ * 优化：限制每篇文档返回内容长度，防止知识库内容占用过多 Token
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class KnowledgeBaseTool {
-    
+
+    /** 每篇文档返回的最大内容字符数 */
+    private static final int MAX_CONTENT_PER_DOC = 1500;
+    /** 搜索结果总输出最大字符数 */
+    private static final int MAX_TOTAL_OUTPUT = 5000;
+
     private final KnowledgeBaseManager knowledgeBaseManager;
-    
-    @Tool("从知识库中检索与查询相关的技术文档和知识")
+
+    @Tool("从知识库中检索与查询相关的技术文档和知识（每篇文档内容自动截断）")
     public String searchKnowledge(String query) {
         log.info("Agent 正在检索知识库: {}", query);
-        
+
         List<KnowledgeDocument> relevantDocs = 
             knowledgeBaseManager.searchRelevantDocuments(query, 5, 0.6);
-        
+
         if (relevantDocs.isEmpty()) {
             return "未找到相关的知识文档。";
         }
-        
+
         StringBuilder result = new StringBuilder("检索到以下相关知识：\n\n");
-        
+
         for (int i = 0; i < relevantDocs.size(); i++) {
             KnowledgeDocument doc = relevantDocs.get(i);
             result.append(String.format("【%d】%s (相关度: %.2f%%)\n", 
@@ -41,10 +48,19 @@ public class KnowledgeBaseTool {
             result.append(String.format("分类: %s\n", doc.getCategory()));
             result.append(String.format("标签: %s\n", 
                 doc.getTags() != null ? String.join(", ", doc.getTags()) : "无"));
-            result.append(String.format("内容:\n%s\n\n", doc.getContent()));
+            // 截断文档内容，避免单篇文档占用过多 Token
+            String content = doc.getContent();
+            if (content != null && content.length() > MAX_CONTENT_PER_DOC) {
+                content = content.substring(0, MAX_CONTENT_PER_DOC) + "\n... (内容已截断)";
+            }
+            result.append(String.format("内容:\n%s\n\n", content));
         }
-        
-        return result.toString();
+
+        String output = result.toString();
+        if (output.length() > MAX_TOTAL_OUTPUT) {
+            output = output.substring(0, MAX_TOTAL_OUTPUT) + "\n\n⚠️ 搜索结果已截断。";
+        }
+        return output;
     }
     
     @Tool("根据分类获取知识库文档列表")

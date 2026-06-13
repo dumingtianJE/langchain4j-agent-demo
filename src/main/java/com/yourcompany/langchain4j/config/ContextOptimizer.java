@@ -1,5 +1,6 @@
 package com.yourcompany.langchain4j.config;
 
+import com.yourcompany.langchain4j.supervisor.AiSupervisor;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -264,7 +265,7 @@ public class ContextOptimizer {
     }
     
     /**
-     * 估算 Token 数量
+     * 估算 Token 数量（委托给 AiSupervisor 的中文感知估算器）
      */
     private int estimateTokens(List<ChatMessage> messages) {
         return messages.stream()
@@ -277,15 +278,14 @@ public class ContextOptimizer {
      */
     private int estimateTokens(ChatMessage message) {
         String content = getMessageContent(message);
-        // 简单估算：中文 1.5 字符/token，英文 4 字符/token
-        return (int)(content.length() * 0.5);
+        return AiSupervisor.estimateTokens(content);
     }
     
     /**
      * 估算字符串 Token 数
      */
     private int estimateTokens(String content) {
-        return (int)(content.length() * 0.5);
+        return AiSupervisor.estimateTokens(content);
     }
     
     /**

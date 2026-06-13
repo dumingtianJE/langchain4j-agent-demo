@@ -1,9 +1,15 @@
 package com.yourcompany.langchain4j.agent;
 
 import com.yourcompany.langchain4j.tool.CodeQualityTool;
+import com.yourcompany.langchain4j.service.ProjectContextCache;
+import com.yourcompany.langchain4j.learning.SelfLearningManager;
+import com.yourcompany.langchain4j.knowledge.KnowledgeBaseManager;
+import com.yourcompany.langchain4j.knowledge.KnowledgeDocument;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+
+import jakarta.annotation.PreDestroy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,20 +18,17 @@ import java.util.concurrent.*;
 import java.util.regex.Pattern;
 
 /**
- * AI 编程 Agent 编排器（增强版）
+ * AI 编程 Agent 编排器（增强版 + Token 优化）
  *
  * 核心能力：
  * 1. 增强意图分类 — 正则 + 中英文关键词 + 置信度评分，降低误分类
  * 2. 质量门禁 — 代码生成后自动调用 CodeQualityTool 做客观验证（安全/规范/复杂度）
- * 3. 自动修正循环 — 质量不达标时自动修复 → 重新审查，最多 2 轮
+ * 3. 自动修正循环 — 质量不达标时定向修复，最多 2 轮
  * 4. 智能上下文传递 — 从上游输出中提取代码块，避免截断关键代码
  * 5. 超时保护与降级 — 单步骤超时 + 连续失败熔断 + 降级策略
- *
- * 子 Agent 能力（来自 AiProgrammingAgent 接口）：
- *   - executeTask()             → 代码生成专家
- *   - reviewCode()              → 代码审查专家
- *   - answerTechnicalQuestion() → 技术分析专家
- *   - generateDocumentation()   → 文档编写专家
+ * 6. 按意图动态路由 Agent — 分析/问答/文档用轻量 Agent，代码生成/审查用完整 Agent
+ * 7. Few-Shot 注入（log.md #8）— 代码生成步骤从知识库检索相似示例注入 Prompt
+ * 8. 历史教训注入（O6）— SelfLearningManager 改进模式注入，避免重蹈覆辙
  */
 @Slf4j
 @Service
@@ -33,7 +36,26 @@ import java.util.regex.Pattern;
 public class AgentOrchestrator {
 
     private final AiProgrammingAgent agent;
+    private final LightweightQaAgent lightweightQaAgent;
     private final CodeQualityTool codeQualityTool;
+    private final ProjectContextCache projectContextCache;
+    private final SelfLearningManager selfLearningManager;
+    private final KnowledgeBaseManager knowledgeBaseManager;
+
+    /** 共享线程池（避免每次步骤创建/销毁线程池，减少线程创建开销） */
+    private final ExecutorService sharedExecutor = Executors.newFixedThreadPool(
+            Math.min(4, Runtime.getRuntime().availableProcessors()),
+            r -> {
+                Thread t = new Thread(r, "orchestrator-worker");
+                t.setDaemon(true);
+                return t;
+            });
+
+    @PreDestroy
+    public void shutdown() {
+        sharedExecutor.shutdownNow();
+        log.info("[Orchestrator] 共享线程池已关闭");
+    }
 
     // ============================================================
     // 配置常量
@@ -376,18 +398,15 @@ public class AgentOrchestrator {
         return results;
     }
 
-    /** P6: 带超时的步骤执行 */
+    /** P6: 带超时的步骤执行（使用共享线程池，避免频繁创建/销毁） */
     private String executeWithTimeout(String stepName, String input, String codeContext)
             throws TimeoutException, InterruptedException {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
             CompletableFuture<String> future = CompletableFuture.supplyAsync(
-                    () -> routeToSubAgent(stepName, input, codeContext), executor);
+                    () -> routeToSubAgent(stepName, input, codeContext), sharedExecutor);
             return future.get(STEP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw new RuntimeException(e.getCause());
-        } finally {
-            executor.shutdownNow();
         }
     }
 
@@ -488,30 +507,53 @@ public class AgentOrchestrator {
         return new QualityGateResult(currentScore, fixRounds, additionalSteps);
     }
 
-    /** 构建自动修正提示词 */
+    /** 构建自动修正提示词（精简版：只发送问题描述 + 受影响代码段，而非完整代码+完整报告） */
     private String buildFixPrompt(String code, String qualityReport, String securityReport, String language) {
+        // 从质量报告中提取具体问题行（❌ 和 🔴 标记的问题）
+        String problemSummary = extractProblemsFromReport(qualityReport + "\n" + securityReport);
+
+        // 截断代码：如果代码太长，只保留前 150 行
+        String codeSnippet = code;
+        String[] codeLines = code.split("\n");
+        if (codeLines.length > 150) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 150; i++) sb.append(codeLines[i]).append("\n");
+            codeSnippet = sb.toString() + "\n// ... 共 " + codeLines.length + " 行，已截取前 150 行";
+        }
+
         return String.format("""
-                请根据以下代码质量审查报告，修复代码中的问题。
+                请根据以下代码质量问题，定向修复代码中的具体问题。
                 
-                【编程语言】: %s
+                【语言】: %s
                 
-                【原始代码】:
+                【发现的问题】:
+                %s
+                
+                【当前代码】:
                 ```
                 %s
                 ```
-                
-                【质量报告】:
-                %s
-                
-                【安全报告】:
-                %s
                 
                 【修复要求】:
-                1. 只修复报告中指出的问题，不要改变业务逻辑
+                1. 只修复上面列出的具体问题，不要改变业务逻辑或重写无关代码
                 2. 修复后必须包含完整的 import 语句
-                3. 添加必要的注释说明修复了什么
-                4. 确保修复后的代码可编译、可运行
-                """, language, code, qualityReport, securityReport);
+                3. 确保修复后的代码可编译、可运行
+                """, language, problemSummary, codeSnippet);
+    }
+
+    /** 从质量/安全报告中提取具体问题（❌、🔴、🟡 标记的行），控制总长度 */
+    private String extractProblemsFromReport(String report) {
+        if (report == null) return "无具体问题描述";
+        StringBuilder problems = new StringBuilder();
+        for (String line : report.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("❌") || trimmed.startsWith("🔴") || trimmed.startsWith("🟡")
+                    || trimmed.startsWith("- ") || trimmed.contains("问题") || trimmed.contains("风险")) {
+                problems.append(trimmed).append("\n");
+                if (problems.length() > 1500) break; // 限制问题描述长度
+            }
+        }
+        return problems.length() > 0 ? problems.toString() : report.substring(0, Math.min(report.length(), 1500));
     }
 
     /** 从质量报告中解析评分 */
@@ -545,18 +587,86 @@ public class AgentOrchestrator {
                                         String previousOutput, String currentStep) {
         StringBuilder input = new StringBuilder(message);
 
+        boolean isCodeGenStep = "代码生成".equals(currentStep) || "代码实现".equals(currentStep);
+
+        // 1. 注入缓存的项目上下文摘要（减少重复分析，节省 Token）
+        if (isCodeGenStep) {
+            String cachedSummary = projectContextCache.getCachedSummary();
+            if (cachedSummary != null && !cachedSummary.isBlank()) {
+                input.append("\n\n").append(cachedSummary);
+                log.debug("[Orchestrator] 已注入缓存的项目摘要到步骤: {}", currentStep);
+            }
+        }
+
+        // 2. Few-Shot 注入（log.md #8）：从知识库检索 1-2 个与任务相关的代码/知识片段作为参考示例
+        //    仅在代码生成步骤注入，可显著提高代码风格一致性
+        if (isCodeGenStep) {
+            String fewShotContext = buildFewShotContext(message);
+            if (!fewShotContext.isBlank()) {
+                input.append("\n\n").append(fewShotContext);
+                log.debug("[Orchestrator] Few-Shot 已注入到步骤: {}", currentStep);
+            }
+        }
+
+        // 3. 历史教训注入（O6 补全）：从 SelfLearningManager 检索改进模式，避免重蹈覆辙
+        try {
+            String learningContext = selfLearningManager.buildLearningContext(message, 3);
+            if (learningContext != null && !learningContext.isBlank()) {
+                input.append("\n\n").append(learningContext);
+                log.debug("[Orchestrator] 学习上下文已注入到步骤: {}", currentStep);
+            }
+        } catch (Exception e) {
+            log.warn("[Orchestrator] 注入学习上下文失败（非关键）: {}", e.getMessage());
+        }
+
+        // 4. 相关代码上下文
         if (codeContext != null && !codeContext.isBlank()) {
             input.append("\n\n【相关代码】:\n").append(codeContext);
         }
 
+        // 5. 上一步骤结果（智能提取代码块，避免截断关键代码）
         if (previousOutput != null && !previousOutput.isBlank()) {
-            // P5: 智能提取 — 优先提取代码块，避免截断关键代码
             String extracted = extractCodeBlockOrSummarize(previousOutput);
             input.append("\n\n【上一步骤结果（").append(currentStep).append("的参考输入）】:\n")
                  .append(extracted);
         }
 
         return input.toString();
+    }
+
+    /**
+     * Few-Shot 上下文构建（log.md #8）
+     * 从知识库中检索与用户任务语义最相关的 1-2 个知识片段，
+     * 以【参考示例】的形式注入 Prompt，让 AI 在生成代码时参考项目已有的风格和模式。
+     * 
+     * 检索条件：minScore=0.65（较高阈值，确保相关性）
+     * 返回长度上限：2000 字符（避免挤占生成空间）
+     */
+    private String buildFewShotContext(String userMessage) {
+        try {
+            List<KnowledgeDocument> examples = knowledgeBaseManager.searchRelevantDocuments(
+                    userMessage, 2, 0.65);
+            if (examples.isEmpty()) return "";
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("【参考示例 — 以下是项目中已有的相关知识/代码风格，请参考】\n");
+            int totalLen = 0;
+            for (KnowledgeDocument doc : examples) {
+                String content = doc.getContent();
+                // 截取每个示例最多 1000 字符
+                if (content.length() > 1000) {
+                    content = content.substring(0, 1000) + "\n... (示例截取)";
+                }
+                // 总长度不超过 2000 字符
+                if (totalLen + content.length() > 2000) break;
+                sb.append("---\n").append(content).append("\n");
+                totalLen += content.length();
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            log.warn("[Orchestrator] Few-Shot 知识库检索失败（非关键）: {}", e.getMessage());
+            return "";
+        }
     }
 
     /**
@@ -595,6 +705,11 @@ public class AgentOrchestrator {
     // 路由 + 辅助方法
     // ============================================================
 
+    /**
+     * 路由到子 Agent（按步骤类型动态选择完整/轻量 Agent）
+     * - 代码生成/实现/审查 → 完整 Agent（需要全部工具）
+     * - 技术分析/项目分析/智能问答/文档生成 → 轻量 Agent（仅需文件+知识库）
+     */
     private String routeToSubAgent(String stepName, String input, String codeContext) {
         return switch (stepName) {
             case "代码生成", "代码实现" ->
@@ -605,13 +720,13 @@ public class AgentOrchestrator {
                 yield agent.reviewCode(codeToReview, language);
             }
             case "技术分析", "项目分析", "智能问答" ->
-                    agent.answerTechnicalQuestion(input);
+                    lightweightQaAgent.answerTechnicalQuestion(input);
             case "文档生成" -> {
                 String docType = inferDocType(input);
-                yield agent.generateDocumentation(input, docType);
+                yield lightweightQaAgent.generateDocumentation(input, docType);
             }
             default ->
-                    agent.answerTechnicalQuestion(input);
+                    lightweightQaAgent.answerTechnicalQuestion(input);
         };
     }
 

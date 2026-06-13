@@ -299,4 +299,50 @@ public class AiSupervisor {
     private String getDayKey() {
         return "day_" + LocalDateTime.now().toLocalDate();
     }
+    
+    // ================================================================
+    // Token 估算工具（中文感知）
+    // ================================================================
+    
+    /**
+     * 估算文本的 Token 数量（中文感知版）
+     * 
+     * 传统估算使用 length/4 对英文有效，但中文每个字符约 1-2 tokens。
+     * 本方法按字符 Unicode 范围分类统计，提高混合语言的估算精度：
+     * - ASCII / 拉丁字符：约 4 字符/token
+     * - CJK（中日韩）字符：约 1.5 字符/token
+     * - 代码特殊字符（{} () [] = + - 等）：约 2 字符/token
+     * 
+     * @param text 待估算文本
+     * @return 预估 Token 数量
+     */
+    public static int estimateTokens(String text) {
+        if (text == null || text.isEmpty()) return 0;
+        
+        int asciiChars = 0;
+        int cjkChars = 0;
+        int otherChars = 0;
+        
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c < 0x80) {
+                asciiChars++;
+            } else if (Character.isIdeographic(c) || 
+                       (c >= 0x3400 && c <= 0x9FFF) ||  // CJK Unified
+                       (c >= 0xF900 && c <= 0xFAFF) ||  // CJK Compatibility
+                       (c >= 0x3040 && c <= 0x30FF) ||  // Hiragana/Katakana
+                       (c >= 0xAC00 && c <= 0xD7AF)) {  // Korean Hangul
+                cjkChars++;
+            } else {
+                otherChars++;
+            }
+        }
+        
+        // 各类字符的 token 估算系数
+        double tokens = (asciiChars / 4.0)    // ASCII: ~4 chars/token
+                      + (cjkChars / 1.5)      // CJK: ~1.5 chars/token
+                      + (otherChars / 2.5);   // 其他: ~2.5 chars/token
+        
+        return Math.max(1, (int) Math.ceil(tokens));
+    }
 }

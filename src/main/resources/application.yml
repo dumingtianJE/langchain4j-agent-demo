@@ -114,7 +114,9 @@ ai:
   chat:
     memory:
       max-messages: ${CHAT_MEMORY_MAX_MESSAGES:50}
-      provider-max-messages: ${CHAT_MEMORY_PROVIDER_MAX_MESSAGES:30}
+      provider-max-messages: ${CHAT_MEMORY_PROVIDER_MAX_MESSAGES:20}
+      # 优化（#3）：TokenWindowChatMemory 预算上限（qwen-max 上下文安全区域）
+      max-tokens: ${CHAT_MEMORY_MAX_TOKENS:8000}
 
 # 代码编辑器工作区（Docker 内默认 /app/workspace，本地默认为当前工作目录）
 app:

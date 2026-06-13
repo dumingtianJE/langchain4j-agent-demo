@@ -12,10 +12,21 @@ import java.util.stream.Collectors;
 /**
  * 项目上下文感知工具
  * 帮助 AI 理解项目结构、依赖和编码规范
+ * 
+ * 优化：工具返回值有长度限制，防止大段内容占用过多 Token
  */
 @Slf4j
 @Component
 public class ProjectContextTool {
+
+    /** 工具返回内容最大字符数 */
+    private static final int MAX_OUTPUT_LENGTH = 4000;
+    /** 分析编码规范时最多扫描的文件数 */
+    private static final int MAX_CONVENTION_FILES = 10;
+    /** 查找相似代码时最多扫描的文件数 */
+    private static final int MAX_SEARCH_FILES = 30;
+    /** 查找相似代码时最多返回的匹配数 */
+    private static final int MAX_MATCH_RESULTS = 15;
     
     /**
      * 分析项目结构
@@ -45,11 +56,12 @@ public class ProjectContextTool {
                 projectInfo.put("buildTool", "npm/yarn");
             }
             
-            // 检测语言
-            long javaFiles = countFiles(path, "*.java");
-            long pyFiles = countFiles(path, "*.py");
-            long jsFiles = countFiles(path, "*.js");
-            long tsFiles = countFiles(path, "*.ts");
+            // 检测语言（单次目录遍历统计所有语言，避免 4 次 Files.walk）
+            Map<String, Long> fileCounts = countFilesByExtension(path, Set.of(".java", ".py", ".js", ".ts"));
+            long javaFiles = fileCounts.getOrDefault(".java", 0L);
+            long pyFiles = fileCounts.getOrDefault(".py", 0L);
+            long jsFiles = fileCounts.getOrDefault(".js", 0L);
+            long tsFiles = fileCounts.getOrDefault(".ts", 0L);
             
             if (javaFiles > 0) projectInfo.put("language", "Java");
             else if (pyFiles > 0) projectInfo.put("language", "Python");
@@ -135,7 +147,7 @@ public class ProjectContextTool {
             
             try (var paths = Files.walk(srcPath)) {
                 paths.filter(p -> p.toString().endsWith(".java"))
-                    .limit(10) // 只分析前10个文件
+                    .limit(MAX_CONVENTION_FILES) // 只分析有限文件数
                     .forEach(p -> {
                         try {
                             String content = Files.readString(p);
@@ -183,7 +195,7 @@ public class ProjectContextTool {
     /**
      * 查找相似代码示例
      */
-    @Tool("在项目中查找相似的代码实现作为参考")
+    @Tool("在项目中查找相似的代码实现作为参考（限制扫描范围和返回数量）")
     public String findSimilarCodeExamples(String projectPath, String keyword) {
         try {
             Path srcPath = Paths.get(projectPath, "src/main/java");
@@ -195,21 +207,19 @@ public class ProjectContextTool {
             
             try (var paths = Files.walk(srcPath)) {
                 paths.filter(p -> p.toString().endsWith(".java"))
+                    .limit(MAX_SEARCH_FILES) // 限制扫描文件数
                     .forEach(p -> {
+                        if (matches.size() >= MAX_MATCH_RESULTS) return; // 已够则跳过
                         try {
                             String content = Files.readString(p);
                             if (content.toLowerCase().contains(keyword.toLowerCase())) {
-                                // 提取相关方法
                                 String relativePath = srcPath.relativize(p).toString();
                                 matches.add("文件: " + relativePath);
-                                
-                                // 提取包含关键词的方法名
                                 content.lines()
                                     .filter(line -> line.contains(keyword))
                                     .limit(2)
                                     .forEach(line -> matches.add("  匹配: " + line.trim()));
-                                
-                                matches.add(""); // 空行分隔
+                                matches.add("");
                             }
                         } catch (IOException e) {
                             // 忽略
@@ -221,8 +231,8 @@ public class ProjectContextTool {
                 return "未找到包含 '" + keyword + "' 的代码示例";
             }
             
-            return "找到以下相关代码示例:\n\n" + 
-                String.join("\n", matches.stream().limit(20).collect(Collectors.toList()));
+            return truncate("找到以下相关代码示例:\n\n" + 
+                String.join("\n", matches), MAX_OUTPUT_LENGTH);
             
         } catch (Exception e) {
             return "错误：查找代码示例失败 - " + e.getMessage();
@@ -230,19 +240,25 @@ public class ProjectContextTool {
     }
     
     /**
-     * 统计文件数量
+     * 单次目录遍历统计多种扩展名的文件数量（比多次 countFiles 调用高效得多）
      */
-    private long countFiles(Path directory, String pattern) throws IOException {
-        if (!Files.exists(directory)) return 0;
+    private Map<String, Long> countFilesByExtension(Path directory, Set<String> extensions) throws IOException {
+        if (!Files.exists(directory)) return Collections.emptyMap();
         
+        Map<String, Long> counts = new HashMap<>();
         try (var paths = Files.walk(directory)) {
-            return paths.filter(Files::isRegularFile)
-                .filter(p -> {
+            paths.filter(Files::isRegularFile)
+                .forEach(p -> {
                     String fileName = p.getFileName().toString();
-                    return fileName.endsWith(pattern.substring(1));
-                })
-                .count();
+                    for (String ext : extensions) {
+                        if (fileName.endsWith(ext)) {
+                            counts.merge(ext, 1L, Long::sum);
+                            break;
+                        }
+                    }
+                });
         }
+        return counts;
     }
     
     /**
@@ -259,6 +275,16 @@ public class ProjectContextTool {
                 sb.append(value).append("\n");
             }
         });
-        return sb.toString();
+        return truncate(sb.toString(), MAX_OUTPUT_LENGTH);
+    }
+
+    /**
+     * 截断字符串到最大长度
+     */
+    private String truncate(String content, int maxLength) {
+        if (content == null || content.length() <= maxLength) return content;
+        int cutPoint = content.lastIndexOf('\n', maxLength);
+        if (cutPoint < maxLength / 2) cutPoint = maxLength;
+        return content.substring(0, cutPoint) + "\n\n⚠️ 内容已截断（原始长度 " + content.length() + " 字符）。";
     }
 }

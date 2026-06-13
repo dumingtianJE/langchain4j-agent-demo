@@ -60,30 +60,45 @@ public class ProjectAwareCodeGenerationService {
         ProjectManagementEnhancer.ProjectQualityReport qualityReport = 
             projectEnhancer.validateProjectCode(projectId, extractCodeFromResponse(generatedCode));
         
-        // 6. 如果质量不达标，要求重新生成
+        // 6. 如果质量不达标，定向修复（而非全量重生成，节省 Token）
         if (!qualityReport.isPassed()) {
-            log.warn("代码质量未达标 ({}/100)，要求重新生成", qualityReport.getOverallScore());
+            log.warn("代码质量未达标 ({}/100)，触发定向修复", qualityReport.getOverallScore());
             
-            String feedback = String.format("""
-                代码质量评分：%d/100（未达到 80 分标准）
+            String extractedCode = extractCodeFromResponse(generatedCode);
+            // 截断代码段：最多 150 行
+            String codeSnippet = extractedCode;
+            String[] codeLines = extractedCode.split("\n");
+            if (codeLines.length > 150) {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < 150; i++) sb.append(codeLines[i]).append("\n");
+                codeSnippet = sb + "\n// ... 共 " + codeLines.length + " 行，已截取前 150 行";
+            }
+            
+            String fixPrompt = String.format("""
+                请根据以下代码质量问题，定向修复代码中的具体问题。
                 
-                质量问题：
+                【质量问题】:
                 %s
                 
-                安全问题：
+                【安全问题】:
                 %s
                 
-                请根据以上反馈重新优化代码。
+                【当前代码】:
+                ```
+                %s
+                ```
+                
+                【修复要求】:
+                1. 只修复上面列出的具体问题，不要改变业务逻辑或重写无关代码
+                2. 修复后必须包含完整的 import 语句
+                3. 确保修复后的代码可编译、可运行
                 """,
-                qualityReport.getOverallScore(),
                 qualityReport.getQualityReport(),
-                qualityReport.getSecurityReport()
+                qualityReport.getSecurityReport(),
+                codeSnippet
             );
             
-            generatedCode = aiProgrammingAgent.executeTask(
-                requirement + "\n\n" + feedback, 
-                projectContext
-            );
+            generatedCode = aiProgrammingAgent.executeTask(fixPrompt, extractedCode);
             
             // 再次验证
             qualityReport = projectEnhancer.validateProjectCode(

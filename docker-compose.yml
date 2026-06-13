@@ -62,8 +62,7 @@ services:
     volumes:
       - app-data:/app/data
       - app-logs:/app/logs
-#      - .:/app/workspace:rw
-      - D:\workspace:/app/workspace:rw
+      - .:/app/workspace:rw
     networks:
       - app-network
     restart: unless-stopped

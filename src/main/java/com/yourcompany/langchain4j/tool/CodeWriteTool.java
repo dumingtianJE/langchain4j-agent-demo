@@ -107,6 +107,9 @@ public class CodeWriteTool {
         }
     }
 
+    /** 读取文件时的最大返回字符数 */
+    private static final int MAX_READ_OUTPUT = 5000;
+
     @Tool("读取指定文件的内容，用于查看现有代码或验证写入结果。参数：filePath-文件路径")
     public String readFileContent(String filePath) {
         try {
@@ -115,6 +118,11 @@ public class CodeWriteTool {
                 return "❌ 错误：文件不存在 - " + filePath;
             }
             String content = Files.readString(path, StandardCharsets.UTF_8);
+            // 大文件截断
+            if (content.length() > MAX_READ_OUTPUT) {
+                content = content.substring(0, MAX_READ_OUTPUT)
+                        + "\n\n⚠️ 文件内容已截断（总长 " + content.length() + " 字符）。如需查看特定部分请指定行范围。";
+            }
             return String.format("✅ 文件内容 (%d 字符):\n\n%s", content.length(), content);
         } catch (IOException e) {
             log.error("读取文件失败: {}", filePath, e);
